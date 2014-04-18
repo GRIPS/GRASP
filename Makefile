@@ -13,7 +13,7 @@ cfitsio=/home/grips/cfitsio
 all: program
 
 # Executable, Change this for new code names
-EXE = dv29
+EXE = grasp
 #EXE = a_rel0
 #EXE = a7
 #EXE= fitsplay
