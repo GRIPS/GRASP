@@ -232,7 +232,7 @@ void CameraSnap(int x);
 void CameraSnap2(int x);
 void spawn_thread(int x);
 void *snap_thread(void *cam);
-void handle_wait(int i, tPvErr errCode, int timeout2);
+void handle_wait(int i, tPvErr &errCode, int timeout2);
 void handle_timeout(int i);
 void Process(int i);
 void CameraUnsetup(tCamera* Camera);
@@ -848,6 +848,7 @@ void *snap_thread(void *cam){
 
  int i = *(int *)(&cam);
 
+
 	if(!PAUSEPROGRAM && !TERMINATE) {
 
 			//initalize variables & housekeeping
@@ -893,7 +894,7 @@ void *snap_thread(void *cam){
 								}
 
 								//do processing if successful
-								if(CAMERAS[i].waitFlag= false) //something about no timeout in condition
+								if(CAMERAS[i].waitFlag= false && errCode == ePvErrSuccess) //something about no timeout in condition
 										Process(i);
 
 						} else {
@@ -920,7 +921,7 @@ void *snap_thread(void *cam){
 /*=============================================================================================
   Handle timeout and waitforframedone
   ========================================================================================== */
-void handle_wait(int i, tPvErr errCode, int timeout2){
+void handle_wait(int i, tPvErr &errCode, int timeout2){
 
 		if (errCode == ePvErrSuccess){ //if returns in time, release flag and process
 				CAMERAS[i].waitFlag= false;
