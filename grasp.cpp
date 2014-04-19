@@ -894,8 +894,11 @@ void *snap_thread(void *cam){
 								}
 
 								//do processing if successful
-								if(CAMERAS[i].waitFlag= false && errCode == ePvErrSuccess) //something about no timeout in condition
+								if(errCode == ePvErrSuccess)
+											cout<<"succ\n";
+								if(CAMERAS[i].waitFlag== false && errCode == ePvErrSuccess){ //something about no timeout in condition
 										Process(i);
+								}
 
 						} else {
 								cout<<"PvCaptureQueueFrame err\n";
