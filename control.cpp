@@ -31,7 +31,8 @@ bool init_prog_c(prog_c& con){
 	//con.live = false;
 	//con.diag = true;					 		//print diagnostics for analyzed frames
 	con.diag = false;	
-	con.c_timer = true;					//elapsed time for analysis
+	//con.c_timer = true;					//elapsed time for analysis
+	con.c_timer = false;
 	//con.temp = true;								//query camera for temperature
 	con.temp = false;
 	con.trig_out = true;				//output signal from camera when exposing
