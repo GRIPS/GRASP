@@ -31,4 +31,7 @@ program:  $(SOURCES)
 install:
 	cp -f $(EXE) $(BIN_DIR) 
 
+main: main.cpp
+	make -C network all
+	$(CC) -o main main.cpp -Inetwork network/*.o
 
