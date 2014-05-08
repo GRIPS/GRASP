@@ -162,7 +162,7 @@ void *TelemetrySenderThread(void *threadargs)
         log.open(filename, std::ofstream::binary);
     }
 */
-    TelemetrySender telSender(IP_LOOPBACK, (unsigned short) PORT_TM);
+    TelemetrySender telSender(IP_FC, (unsigned short) PORT_TM);
 
     while(!stop_message[tid])
     {

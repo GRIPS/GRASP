@@ -33,5 +33,5 @@ install:
 
 main: main.cpp
 	make -C network all
-	$(CC) -o main main.cpp -Inetwork network/*.o
+	$(CC) -o main main.cpp -Inetwork network/*.o -lpthread
 
