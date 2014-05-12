@@ -92,7 +92,7 @@ void *TelemetryPackagerThread(void *threadargs);
 void *CommandListenerThread(void *threadargs);
 void cmd_process_command(CommandPacket &cp);
 void *CommandHandlerThread(void *threadargs);
-void queue_cmd_proc_ack_tmpacket( uint16_t error_code );
+void queue_cmd_proc_ack_tmpacket( uint64_t error_code );
 
 template <class T>
 bool set_if_different(T& variable, T value); //returns true if the value is different
@@ -262,7 +262,7 @@ void *CommandListenerThread(void *threadargs)
     pthread_exit( NULL );
 }
 
-void queue_cmd_proc_ack_tmpacket( uint16_t error_code )
+void queue_cmd_proc_ack_tmpacket( uint64_t error_code )
 {
     TelemetryPacket ack_tp(SYS_ID_ASP, TM_ACK, command_sequence_number, 0x000000);
     ack_tp << error_code;
@@ -279,7 +279,7 @@ void *CommandHandlerThread(void *threadargs)
     // 
     long tid = (long)((struct Thread_data *)threadargs)->thread_id;
     struct Thread_data *my_data;
-    uint16_t error_code = 0x0001;
+    uint64_t error_code = 0x0001;
     my_data = (struct Thread_data *) threadargs;
 
     queue_cmd_proc_ack_tmpacket( error_code );
