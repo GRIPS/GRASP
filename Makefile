@@ -1,14 +1,16 @@
 include ARCH
 
 #CCfits = /usr/local/include/CCfits
+
+#ASPECT makefile settings
 CCfitslib = /usr/local/lib
-#CCfitslib=/home/grips/desktop
-CCfits=/home/grips/CCfits
-cfitsio=/home/grips/cfitsio
+CCfits=/usr/local/include/CCfits
+cfitsio=/usr/local/include
+cfitsiolib=~/CCfits
 
-
-# Modification of Makefile found in GRASPv0 folder.
-# Including the CCfits and cfitsio directories  
+#GRASI makefile settings
+#CCfits=/home/grips/CCfits
+#cfitsio=/home/grips/cfitsio
 
 all: program
 
@@ -26,7 +28,7 @@ clean:
 	rm $(EXE)
 
 program:  $(SOURCES)
-	$(CC)  $(RPATH) $(TARGET) $(CFLAGS) $(SOURCES) -g -o $(EXE) $(SOLIB) $(PVLIB)  -I$(CCfits) -I$(cfitsio) -L$(CCfitslib) -lCCfits $(IMLIB) 
+	$(CC)  $(RPATH) $(TARGET) $(CFLAGS) $(SOURCES) -g -o $(EXE) $(SOLIB) $(PVLIB)  -I$(CCfits) -I$(cfitsio) -I$(cfitsiolib) -L$(CCfitslib) -lCCfits $(IMLIB) 
 
 install:
 	cp -f $(EXE) $(BIN_DIR) 
