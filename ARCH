@@ -3,7 +3,7 @@
 # this file should be adapted to your platform
 
 # Target CPU
-CPU     = x86
+CPU     = x64
 
 # Target OS
 OS      = LINUX
