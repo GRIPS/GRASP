@@ -22,7 +22,7 @@ SP      = strip
 
 # some flags
 DFLAGS	= -D_$(CPU) -D_$(OS)
-FLAGS   = -fno-strict-aliasing -fexceptions -I/usr/include $(DFLAGS)
+FLAGS   = -fno-strict-aliasing -fexceptions -I/usr/include -I/usr/local/lib $(DFLAGS)
 
 ## path where to look for PvAPI shared lib
 RPATH	= -Wl,--rpath -Wl,./ 
@@ -35,7 +35,8 @@ OBJ_DIR	  = ./obj/$(CPU)
 EXTRA_LIB = -lpthread -lrt
 
 ## TIFF library
-LTIFF   = -ltiff
+#LTIFF   = -ltiff
+LTIFF = 
 LJPEG   = -ljpeg
 
 ## libs (shared/static)
