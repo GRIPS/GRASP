@@ -36,7 +36,7 @@ EXTRA_LIB = -lpthread -lrt
 
 ## TIFF library
 #LTIFF   = -ltiff
-LTIFF = 
+LTIFF =  #careful this is a hack
 LJPEG   = -ljpeg
 
 ## libs (shared/static)

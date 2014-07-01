@@ -586,27 +586,33 @@ void set_cadence(){
  timer(1); disable timer
 ==============================================================================================*/
 void set_timer(int x){
-		//create handler
-		struct sigaction act;  
-		struct sigaction oldact;
-		//act.sa_handler = CameraSnap2;
-		act.sa_handler = spawn_thread;
-		sigaction(10, &act, &oldact);	
+	//create handler
+	struct sigaction act;  
+	struct sigaction oldact;
+	//act.sa_handler = CameraSnap2;
+	act.sa_handler = spawn_thread;
+	sigaction(10, &act, &oldact);	
 
-		//set the sigevent notification structure
-		struct sigevent timersigevent; //create signal event
-		memset(&timersigevent, 0, sizeof timersigevent); //initialize the struct with zeros
-		timersigevent.sigev_notify = SIGEV_THREAD_ID | SIGEV_SIGNAL; //send a signal upon expiration of timer & only to a certain thread
-		timersigevent.sigev_signo = 10; //set to SIGUSR1 number 10
-		timersigevent._sigev_un._tid = syscall(SYS_gettid); //notify the thread that creates the timer. This will be the main thread.
+	//set the sigevent notification structure
+	struct sigevent timersigevent; //create signal event
+	memset(&timersigevent, 0, sizeof timersigevent); //initialize the struct with zeros
+	timersigevent.sigev_notify = SIGEV_THREAD_ID | SIGEV_SIGNAL; //send a signal upon expiration of timer & only to a certain thread
+	timersigevent.sigev_signo = 10; //set to SIGUSR1 number 10
+	timersigevent._sigev_un._tid = syscall(SYS_gettid); //notify the thread that creates the timer. This will be the main thread.
 
-		//create the timer
-		timer_t timer1; //timer identifier	
-		if(timer_create(CLOCK_REALTIME, &timersigevent, &timer1) == 0){
-			printf("timer created correctly\n");
-		}else{
-			printf("timer not created \n");
-		} 
+	//create the timer
+	timer_t timer1; //timer identifier	
+	if(timer_create(CLOCK_REALTIME, &timersigevent, &timer1) == 0){
+		printf("timer created correctly\n");
+	}else{
+		printf("timer not created \n");
+	} 
+
+	//sleep to allow dd to register the handler before arming timer
+	struct timespec tim, tim2;
+	tim.tv_sec=0;
+	tim.tv_nsec=100;
+	nanosleep(&tim, &tim2);
 
 
 	if(x == 0){
