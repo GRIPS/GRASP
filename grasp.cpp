@@ -211,6 +211,8 @@ bool PAUSEPROGRAM = false;
 tCamera GCamera;
 tCamera CAMERAS[MAXNUMOFCAMERAS];
 
+unsigned long PY_cam_ID = 158434;
+unsigned long H_cam_ID = 142974;
 // __________________________________________________________________________________________end
 
 
@@ -337,13 +339,24 @@ bool getTemp(tCamera* Camera){
 	tPvFloat32 T_MB = 0;
 	tPvFloat32 T_CCD = 0;
 
+	const char* whichfile;
+	ofstream tempfile;
+	if(Camera->UID == PY_cam_ID){
+		whichfile = "PY_temps.txt";
+	}else{
+		whichfile = "H_temps.txt";
+	}
+	tempfile.open(whichfile, ios::app);
+
 	if(PvAttrFloat32Get(Camera->Handle, "DeviceTemperatureMainboard", &T_MB) == 0){	
-				PvAttrFloat32Get(Camera->Handle, "DeviceTemperatureSensor", &T_CCD);
-				cout<<"T_MB = "<<T_MB<<endl;
-				cout<<"T_CCD = "<<T_CCD<<endl;
+				//PvAttrFloat32Get(Camera->Handle, "DeviceTemperatureSensor", &T_CCD);
+				//cout<<"T_MB = "<<T_MB<<endl;
+				//cout<<"T_CCD = "<<T_CCD<<endl;
+				tempfile << T_MB <<endl;
 				return true;
 	}	else {
 				cout<<"Temp error\n";
+				tempfile << "Temp error"<< endl;
 				//PrintError(PvAttrFloat32Get(Camera->Handle, "DeviceTemperatureMainboard", &T_MB));
 			//	PrintError(PvAttrFloat32Get(Camera->Handle, "DeviceTemperatureSensor", &T_CCD));
 				//cout<<"T_MB = "<<T_MB<<endl;
@@ -423,20 +436,20 @@ bool CameraGrab() {
 	//try 1st camera
 	memset(&CAMERAS[i], 0, sizeof(tCamera));
 	if(!PvCameraOpenByAddr(inet_addr(IP1), ePvAccessMaster, &(CAMERAS[i].Handle))) {
-				CAMERAS[i].UID = 104533;
+				CAMERAS[i].UID = PY_cam_ID;
 				CAMERAS[i].IP =  inet_addr(IP1);
 				i+=1;
 	}else{
-				cout<<"couldn't open camera 104533\n";
+				cout<<"couldn't open PY camera\n";
 	}
 	//try 2nd camera
 	memset(&CAMERAS[i], 0, sizeof(tCamera));
 	if(!PvCameraOpenByAddr(inet_addr(IP2), ePvAccessMaster, &(CAMERAS[i].Handle))) {
-				CAMERAS[i].UID = 142974;
+				CAMERAS[i].UID = H_cam_ID;
 				CAMERAS[i].IP =  inet_addr(IP2);
 				i+=1;
 	}else{
-				cout<<"couldn't open camera 142974\n";
+				cout<<"couldn't open H camera\n";
 	}
 
 	NUMOFCAMERAS = i;
@@ -505,7 +518,7 @@ bool CameraSetup(tCamera* Camera, int cam) {
 
 		if(con.def){
 				cout<<"Default settings: 1 im/s, 20000us, no saving\n";
-				Camera->TicksPerSec = 3;
+				Camera->TicksPerSec = 5;
 				Camera->ExposureLength = 20000;
 				//Camera->WantToSave = false;
 				Camera->WantToSave = true;
@@ -607,6 +620,12 @@ void set_timer(int x){
 		}else{
 			printf("timer not created \n");
 		} 
+
+		//sleep to allow dd to register the handler before arming the timer
+		struct timespec tim, tim2;
+		tim.tv_sec=0;
+		tim.tv_nsec=100;
+		nanosleep(&tim, &tim2);
 
 
 	if(x == 0){
@@ -830,7 +849,8 @@ void spawn_thread(int x){
 					cout<<"Error: "<<thread_err<<endl;
 			}
 	
-			cout<<"Camera "<<CAMERAS[i].UID<<" frame "<<CAMERAS[i].idx<<endl;
+			//cout<<"Camera "<<CAMERAS[i].UID<<" frame "<<CAMERAS[i].idx<<endl;
+			cout<<"..\n";
 			//cout<<" \n"; //without this the transmission time is 50ms, wiht it its .05ms.. something is wrong
 
 			//update thread and buffer indexes 
@@ -863,8 +883,9 @@ void *snap_thread(void *cam){
 			int count = 0;
 			prog_c con;
 			init_prog_c(con); 
-			if(con.temp)
-					getTemp(&CAMERAS[i]);
+			
+			//housekeeping
+			getTemp(&CAMERAS[i]);
 
 			//start snap only if we're done waiting for another frame to return (but doesn't protect frame buffer)
 			if(CAMERAS[i].Handle != NULL && !CAMERAS[i].PauseCapture && !CAMERAS[i].waitFlag) { 
@@ -1008,11 +1029,11 @@ void Process(int i, int CurrBuffer){
 
 	valarray<unsigned char> imarr((unsigned char*)CAMERAS[i].Frames[CurrBuffer].ImageBuffer, CAMERAS[i].FrameHeight*CAMERAS[i].FrameWidth);	
 
-	if(CAMERAS[i].UID == 142974){
-				cout<<"ProcessPY\n";
+	if(CAMERAS[i].UID == PY_cam_ID){
+				//cout<<"ProcessPY\n";
 				ProcessPY(i, imarr);
-	} else if(CAMERAS[i].UID == 104533){
-				cout<<"ProcessH\n";
+	} else if(CAMERAS[i].UID == H_cam_ID){
+				//cout<<"ProcessH\n";
 				ProcessH(i, imarr);
 	} else {
 				cout<<"Unkown UID. No processing.\n";
@@ -1471,11 +1492,11 @@ if(!PAUSEPROGRAM && !TERMINATE) {
 				checkerr(i);
 				
 				//requeue a frame buffer and set the CB
-				/*if(CAMERAS[i].UID == 104533){				
+				/*if(CAMERAS[i].UID == PY_cam_ID){				
 									CAMERAS[i].queueStatus=PvCaptureQueueFrame(CAMERAS[i].Handle,
 									&(CAMERAS[i].Frames[CAMERAS[i].BufferIndex]),
 									FrameDone0); //Place an image buffer onto the queue frame and send to the 0th callback
-				}else if (CAMERAS[i].UID == 142974){
+				}else if (CAMERAS[i].UID == H_cam_ID){
 									CAMERAS[i].queueStatus=PvCaptureQueueFrame(CAMERAS[i].Handle,
 									&(CAMERAS[i].Frames[CAMERAS[i].BufferIndex]),
 									FrameDone1); //Place an image buffer onto the queue frame and send to 1st callback
