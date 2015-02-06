@@ -27,8 +27,8 @@ using namespace std;
 bool init_prog_c(prog_c& con){
 
 	//program control
-	con.live = true; 					 	//change this to run in testing mode
-	//con.live = false;
+	//con.live = true; 					 	//change this to run in testing mode
+	con.live = false;
 	//con.diag = true;					 		//print diagnostics for analyzed frames
 	con.diag = false;	
 	//con.c_timer = true;					//elapsed time for analysis
