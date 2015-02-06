@@ -627,12 +627,6 @@ void set_timer(int x){
 	tim.tv_nsec=100;
 	nanosleep(&tim, &tim2);
 
-		//sleep to allow dd to register the handler before arming the timer
-		struct timespec tim, tim2;
-		tim.tv_sec=0;
-		tim.tv_nsec=100;
-		nanosleep(&tim, &tim2);
-
 
 	if(x == 0){
 		//Set timer values
