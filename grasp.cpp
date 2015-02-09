@@ -517,7 +517,7 @@ bool CameraSetup(tCamera* Camera, int cam) {
 		init_prog_c(con);
 
 		if(con.def){
-				cout<<"Default settings: 1 im/s, 20000us, no saving\n";
+				cout<<"Default settings: 5 im/s, 20000us, saving\n";
 				Camera->TicksPerSec = 5;
 				Camera->ExposureLength = 20000;
 				//Camera->WantToSave = false;
