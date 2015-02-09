@@ -834,6 +834,11 @@ void spawn_thread(int x){
 
 	if(!PAUSEPROGRAM && !TERMINATE) {
 
+			//code heartbeat
+			if(TICKCOUNT % a_cad == 0)
+				heartbeat_code();
+
+
 			//which camera snaps?
 			int i = whichcamera();
 

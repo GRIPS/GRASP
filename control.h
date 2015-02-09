@@ -42,6 +42,8 @@ struct prog_c	{
 
 bool init_prog_c(prog_c& con);
 
+bool heartbeat_code();
+
 
 
 #endif

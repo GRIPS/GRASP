@@ -33,8 +33,8 @@ bool init_prog_c(prog_c& con){
 	con.diag = false;	
 	//con.c_timer = true;					//elapsed time for analysis
 	con.c_timer = false;
-	//con.temp = true;								//query camera for temperature
-	con.temp = false;
+	con.temp = true;								//query camera for temperature
+	//con.temp = false;
 	con.trig_out = true;				//output signal from camera when exposing
 	con.def = true;									//use default settings
 
@@ -46,4 +46,20 @@ bool init_prog_c(prog_c& con){
 }
 // __________________________________________________________________________________________end
 
+
+
+/* =============================================================================================
+			Camera heartbeat
+			eventurally put in a packet, for now print to a file
+   ========================================================================================== */
+bool heartbeat_code(){
+
+	ofstream heartfile;
+	heartfile.open("Code_heartbeat.txt", ios::app);
+	heartfile << "Code alive"<<endl;
+
+	return true;
+
+}
+// __________________________________________________________________________________________end
 
