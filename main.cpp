@@ -27,6 +27,9 @@
 //GRIPS system ID
 #define SYS_ID_FC  0x00
 #define SYS_ID_ASP 0x40
+#define SYS_ID_PYC 0x4A
+#define SYS_ID_RC  0x4B
+#define SYS_ID_IRS 0x4C
 
 //GRIPS telemetry types
 #define TM_ACK          0x01
@@ -63,6 +66,7 @@
 
 // global declarations
 uint8_t command_sequence_number = -1;
+uint8_t latest_system_id = 0xFF;
 uint8_t latest_command_key = 0xFF;
 uint8_t py_image_counter = 0;
 uint8_t roll_image_counter = 0;
@@ -219,7 +223,7 @@ void *TelemetryHousekeepingThread(void *threadargs)
         usleep(USLEEP_TM_HOUSEKEEPING);
         tm_frame_sequence_number++;
 
-        TelemetryPacket tp(SYS_ID_ASP, TM_HOUSEKEEPING, tm_frame_sequence_number, oeb_clock());
+        TelemetryPacket tp(SYS_ID_ASP, TM_HOUSEKEEPING, tm_frame_sequence_number, oeb_get_clock());
 
         uint8_t status_bitfield = 0;
         #ifdef FAKE_TM
@@ -255,7 +259,7 @@ void *TelemetryA2DThread(void *threadargs)
         usleep(USLEEP_TM_A2D);
         tm_frame_sequence_number++;
 
-        TelemetryPacket tp(SYS_ID_ASP, TM_A2D, tm_frame_sequence_number, oeb_clock());
+        TelemetryPacket tp(SYS_ID_ASP, TM_A2D, tm_frame_sequence_number, oeb_get_clock());
 
         uint16_t a2d[32];
         memset(a2d, 0, 32 * sizeof(uint16_t));
@@ -287,7 +291,7 @@ void *TelemetryScienceThread(void *threadargs)
         usleep(USLEEP_TM_SCIENCE);
         tm_frame_sequence_number++;
 
-        TelemetryPacket tp(SYS_ID_ASP, TM_SCIENCE, tm_frame_sequence_number, oeb_clock());
+        TelemetryPacket tp(SYS_ID_ASP, TM_SCIENCE, tm_frame_sequence_number, oeb_get_clock());
 
         uint8_t quality_bitfield = 0;
         tp << quality_bitfield;
@@ -390,14 +394,14 @@ void *CommandListenerThread(void *threadargs)
 
 void queue_cmd_proc_ack_tmpacket( uint64_t error_code )
 {
-    TelemetryPacket ack_tp(SYS_ID_ASP, TM_ACK, command_sequence_number, oeb_clock());
+    TelemetryPacket ack_tp(latest_system_id, TM_ACK, command_sequence_number, oeb_get_clock());
     ack_tp << error_code;
     tm_packet_queue << ack_tp;
 }
 
 void queue_settings_tmpacket()
 {
-    TelemetryPacket tp(SYS_ID_ASP, TM_SETTINGS, 0, oeb_clock());
+    TelemetryPacket tp(SYS_ID_ASP, TM_SETTINGS, 0, oeb_get_clock());
 
     uint16_t last_parameter_table = 0;
     tp << last_parameter_table;
@@ -514,6 +518,7 @@ int main(void)
             CommandPacket cp(NULL);
             cm_packet_queue >> cp;
 
+            latest_system_id = cp.getSystemID();
             latest_command_key = cp.getCmdType();
 
             printf("Received command key 0x%02X\n", latest_command_key);

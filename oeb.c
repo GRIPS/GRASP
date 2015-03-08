@@ -35,14 +35,23 @@ int oeb_init()
     return 0;
 }
 
-uint64_t oeb_clock()
+uint64_t oeb_get_clock()
 {
+    //TODO: needs mutex protection
     put_byte(CLOCK_READ, 0); //latches the value of the clock for reading
     return get_48(CLOCK_LOW, CLOCK_MID, CLOCK_HIGH);
 }
 
+void oeb_set_clock(uint64_t value)
+{
+    put_word(CLOCK_LOW, value & 0xFFFF);
+    put_word(CLOCK_MID, (value >> 16) & 0xFFFF);
+    put_word(CLOCK_HIGH, (value >> 32) & 0xFFFF);
+}
+
 uint64_t oeb_ir()
 {
+    //TODO: needs mutex protection
     put_byte(IR_LOW, 0); //latches something
     return get_48(IR_LOW, IR_MID, IR_HIGH);
 }
