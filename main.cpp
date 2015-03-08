@@ -83,10 +83,10 @@ pthread_mutex_t mutexStartThread; //Keeps new threads from being started simulta
 
 struct Thread_data{
     int thread_id;
-    int camera_id;
+    uint8_t system_id;
     uint8_t command_key;
-    uint8_t command_num_vars;
-    uint16_t command_vars[15];
+    uint8_t payload_size;
+    uint8_t payload[15];
 };
 struct Thread_data thread_data[MAX_THREADS];
 
@@ -424,12 +424,78 @@ void *CommandHandlerThread(void *threadargs)
     // error_code   description
     // 0x0000       command implemented successfully
     // 0x0001       command not implemented
-    // 0xFFFF       unknown command
+    // 0xEEEE       unknown command
+    // 0xFFFF       unknown system ID
     // 
     long tid = (long)((struct Thread_data *)threadargs)->thread_id;
     struct Thread_data *my_data;
     uint64_t error_code = 0x0001;
     my_data = (struct Thread_data *) threadargs;
+
+    switch(my_data->system_id)
+    {
+        case SYS_ID_ASP:
+            switch(my_data->command_key)
+            {
+                case 0x99: //Set clock value to sync to
+                    break;
+                case 0xA0: //Turn OFF pitch-yaw camera
+                    break;
+                case 0xA1: //Turn ON pitch-yaw camera
+                    break;
+                case 0xB0: //Turn OFF roll camera
+                    break;
+                case 0xB1: //Turn ON roll camera
+                    break;
+                case 0xC0: //Turn OFF IR sensor
+                    break;
+                case 0xC1: //Turn ON IR sensor
+                    break;
+                case 0xD0: //Request settings telemetry packet
+                    queue_settings_tmpacket();
+                    error_code = 0;
+                    break;
+                case 0xD1: //Set cadence of housekeeping packet
+                    break;
+                case 0xD2: //Set cadence of A2D temperatures packet
+                    break;
+                case 0xD3: //Set cadence of science packet
+                    break;
+                case 0xE0: //Load parameter table
+                    break;
+                case 0xF0: //Restart worker threads, handle elsewhere!
+                    break;
+                case 0xF1: //Restart all threads, handle elsewhere!
+                    break;
+                case 0xF2: //Restart runtime, handle elsewhere!
+                    break;
+                case 0xFF: //Graceful computer shutdown, handle elsewhere!
+                    break;
+                default:
+                    error_code = 0xEEEE; //unknown command
+            } //switch for command key
+            break;
+        case SYS_ID_PYC:
+        case SYS_ID_RC:
+            switch(my_data->command_key & 0xF)
+            {
+                case 0x4: //Set FPS
+                    break;
+                case 0x5: //Set gain
+                    break;
+                case 0x6: //Set exposure
+                    break;
+                case 0xC: //Send latest image
+                    break;
+                case 0xD: //Send specific image
+                    break;
+                default:
+                    error_code = 0xEEEE; //unknown command
+            } //switch for command key
+            break;
+        default:
+            error_code = 0xFFFF; //unknown system ID
+    } //switch for system ID
 
     queue_cmd_proc_ack_tmpacket( error_code );
 
@@ -472,10 +538,37 @@ void cmd_process_command(CommandPacket &cp)
 {
     std::cout << cp << std::endl;
 
-    uint16_t command = cp.getCmdType();
-
     Thread_data tdata;
-    tdata.command_key = command;
+    tdata.system_id = cp.getSystemID();
+    tdata.command_key = cp.getCmdType();
+    cp.setReadIndex(8);
+    tdata.payload_size = cp.remainingBytes();
+    if (tdata.payload_size > 0) {
+        cp.readNextTo_bytes(tdata.payload, tdata.payload_size);
+    }
+
+    switch(tdata.command_key)
+    {
+        case 0x00:
+            queue_cmd_proc_ack_tmpacket(0);
+            break;
+        case 0xF0:
+            kill_all_workers();
+            start_all_workers();
+            break;
+        case 0xF1:
+            kill_all_threads();
+            start_thread(CommandListenerThread, NULL);
+            start_all_workers();
+        case 0xF2:
+            g_running = 0;
+            break;
+        case 0xFF:
+            std::cerr << "Graceful shutdown not yet implemented!\n";
+            break;
+        default:
+            start_thread(CommandHandlerThread, &tdata);
+    } //switch
 
     start_thread(CommandHandlerThread, &tdata);
 }
