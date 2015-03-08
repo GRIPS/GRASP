@@ -432,12 +432,17 @@ void *CommandHandlerThread(void *threadargs)
     uint64_t error_code = 0x0001;
     my_data = (struct Thread_data *) threadargs;
 
+    uint64_t value = 0;
+
     switch(my_data->system_id)
     {
         case SYS_ID_ASP:
             switch(my_data->command_key)
             {
                 case 0x99: //Set clock value to sync to
+                    memcpy(&value, my_data->payload, 6);
+                    oeb_set_clock(value);
+                    error_code = 0;
                     break;
                 case 0xA0: //Turn OFF pitch-yaw camera
                     break;
@@ -472,6 +477,7 @@ void *CommandHandlerThread(void *threadargs)
                 case 0xFF: //Graceful computer shutdown, handle elsewhere!
                     break;
                 default:
+                    std::cerr << "Unknown command\n";
                     error_code = 0xEEEE; //unknown command
             } //switch for command key
             break;
@@ -490,10 +496,12 @@ void *CommandHandlerThread(void *threadargs)
                 case 0xD: //Send specific image
                     break;
                 default:
+                    std::cerr << "Unknown command\n";
                     error_code = 0xEEEE; //unknown command
             } //switch for command key
             break;
         default:
+            std::cerr << "Unknown system ID\n";
             error_code = 0xFFFF; //unknown system ID
     } //switch for system ID
 
@@ -560,6 +568,7 @@ void cmd_process_command(CommandPacket &cp)
             kill_all_threads();
             start_thread(CommandListenerThread, NULL);
             start_all_workers();
+            break;
         case 0xF2:
             g_running = 0;
             break;
@@ -569,8 +578,6 @@ void cmd_process_command(CommandPacket &cp)
         default:
             start_thread(CommandHandlerThread, &tdata);
     } //switch
-
-    start_thread(CommandHandlerThread, &tdata);
 }
 
 void start_all_workers()
@@ -614,7 +621,7 @@ int main(void)
             latest_system_id = cp.getSystemID();
             latest_command_key = cp.getCmdType();
 
-            printf("Received command key 0x%02X\n", latest_command_key);
+            printf("Received system ID/command key 0x%02X/0x%02X\n", latest_system_id, latest_command_key);
             cmd_process_command(cp);
         }
     }

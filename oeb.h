@@ -5,8 +5,10 @@
 
 int oeb_init(); //Returns 0 if communication with the OEB can be established, otherwise return -1
 uint64_t oeb_get_clock();
-uint64_t oeb_set_clock(); //The clock is not actually set to this value until the OEB receives the synchronization signal
+void oeb_set_clock(uint64_t value); //The clock is not actually set to this value until the OEB receives the synchronization signal
 
-uint64_t oeb_ir();
+uint64_t oeb_get_irs();
+uint64_t oeb_get_pyc();
+uint64_t oeb_get_rc();
 
 #endif
