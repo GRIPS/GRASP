@@ -7,11 +7,13 @@
 #define SLEEP_KILL             2 // waits when killing all threads
 
 //Sleep settings (microseconds)
-#define USLEEP_CMD_SEND     5000 // period for popping off the command queue
-#define USLEEP_TM_SEND     50000 // period for popping off the telemetry queue
-#define USLEEP_TM_GENERIC 950000 // period for adding generic telemetry packets to queue
-#define USLEEP_UDP_LISTEN   1000 // safety measure in case UDP listening is changed to non-blocking
-#define USLEEP_MAIN         5000 // period for checking for new commands
+#define USLEEP_CMD_SEND           5000 // period for popping off the command queue
+#define USLEEP_TM_SEND           50000 // period for popping off the telemetry queue
+#define USLEEP_TM_HOUSEKEEPING 5000000 // period for adding housekeeping telemetry packets to queue
+#define USLEEP_TM_A2D          5000000 // period for adding A2D telemetry packets to queue
+#define USLEEP_TM_SCIENCE      1000000 // period for adding science telemetry packets to queue
+#define USLEEP_UDP_LISTEN         1000 // safety measure in case UDP listening is changed to non-blocking
+#define USLEEP_MAIN               5000 // period for checking for new commands
 
 //IP addresses
 #define IP_FC      "192.168.2.100"
@@ -28,6 +30,10 @@
 
 //GRIPS telemetry types
 #define TM_ACK 0x01
+#define TM_HOUSEKEEPING 0x02
+#define TM_SETTINGS 0x03
+#define TM_A2D 0x04
+#define TM_SCIENCE 0x10
 
 //GRIPS commands, shared
 #define KEY_NULL                 0x00
@@ -56,6 +62,8 @@
 // global declarations
 uint8_t command_sequence_number = -1;
 uint8_t latest_command_key = 0xFF;
+uint8_t py_image_counter = 0;
+uint8_t roll_image_counter = 0;
 
 TelemetryPacketQueue tm_packet_queue; //for sending
 CommandPacketQueue cm_packet_queue; //for receiving
@@ -87,12 +95,15 @@ void kill_all_threads(); //kills all threads
 void kill_all_workers(); //kills all threads except the one that listens for commands
 
 void *TelemetrySenderThread(void *threadargs);
-void *TelemetryPackagerThread(void *threadargs);
+void *TelemetryHousekeepingThread(void *threadargs);
+void *TelemetryA2DThread(void *threadargs);
+void *TelemetryScienceThread(void *threadargs);
 
 void *CommandListenerThread(void *threadargs);
 void cmd_process_command(CommandPacket &cp);
 void *CommandHandlerThread(void *threadargs);
 void queue_cmd_proc_ack_tmpacket( uint64_t error_code );
+void queue_settings_tmpacket();
 
 template <class T>
 bool set_if_different(T& variable, T value); //returns true if the value is different
@@ -172,7 +183,7 @@ void *TelemetrySenderThread(void *threadargs)
             TelemetryPacket tp(NULL);
             tm_packet_queue >> tp;
             telSender.send( &tp );
-            //std::cout << "TelemetrySender:" << tp << std::endl;
+            std::cout << "TelemetrySender:" << tp << std::endl;
 /*
             if (LOG_PACKETS && log.is_open()) {
                 uint16_t length = tp.getLength();
@@ -194,24 +205,137 @@ void *TelemetrySenderThread(void *threadargs)
     pthread_exit( NULL );
 }
 
-void *TelemetryPackagerThread(void *threadargs)
+void *TelemetryHousekeepingThread(void *threadargs)
 {
     long tid = (long)((struct Thread_data *)threadargs)->thread_id;
-    printf("TelemetryPackager thread #%ld!\n", tid);
+    printf("TelemetryHousekeeping thread #%ld!\n", tid);
 
     uint32_t tm_frame_sequence_number = 0;
 
     while(!stop_message[tid])
     {
-        usleep(USLEEP_TM_GENERIC);
+        usleep(USLEEP_TM_HOUSEKEEPING);
         tm_frame_sequence_number++;
 
-        TelemetryPacket tp(SYS_ID_ASP, 0x00, tm_frame_sequence_number, 0x00000000);
+        TelemetryPacket tp(SYS_ID_ASP, TM_HOUSEKEEPING, tm_frame_sequence_number, 0x00000000);
+
+        uint8_t status_bitfield = 0;
+        #ifdef FAKE_TM
+        status_bitfield = (tm_frame_sequence_number % 2) ? 0x7 : 0x0;
+        #endif
+        tp << status_bitfield << latest_command_key;
+
+        int16_t temp_py = 0, temp_roll = 0, temp_mb = 0;
+        #ifdef FAKE_TM
+        temp_py = tm_frame_sequence_number;
+        temp_roll = tm_frame_sequence_number + 1;
+        temp_mb = tm_frame_sequence_number + 2;
+        #endif
+        tp << temp_py * 10 << temp_roll * 10 << temp_mb * 10;
 
         tm_packet_queue << tp;
     }
 
-    printf("TelemetryPackager thread #%ld exiting\n", tid);
+    printf("TelemetryHousekeeping thread #%ld exiting\n", tid);
+    started[tid] = false;
+    pthread_exit( NULL );
+}
+
+void *TelemetryA2DThread(void *threadargs)
+{
+    long tid = (long)((struct Thread_data *)threadargs)->thread_id;
+    printf("TelemetryA2D thread #%ld!\n", tid);
+
+    uint32_t tm_frame_sequence_number = 0;
+
+    while(!stop_message[tid])
+    {
+        usleep(USLEEP_TM_A2D);
+        tm_frame_sequence_number++;
+
+        TelemetryPacket tp(SYS_ID_ASP, TM_A2D, tm_frame_sequence_number, 0x00000000);
+
+        uint16_t a2d[32];
+        memset(a2d, 0, 32 * sizeof(uint16_t));
+        #ifdef FAKE_TM
+        for (int i = 0; i < 32; i++) {
+            a2d[i] = tm_frame_sequence_number + i;
+        }
+        #endif
+        tp.append_bytes(a2d, 32*sizeof(uint16_t));
+
+        tm_packet_queue << tp;
+    }
+
+    printf("TelemetryA2D thread #%ld exiting\n", tid);
+    started[tid] = false;
+    pthread_exit( NULL );
+}
+
+void *TelemetryScienceThread(void *threadargs)
+{
+    long tid = (long)((struct Thread_data *)threadargs)->thread_id;
+    printf("TelemetryScience thread #%ld!\n", tid);
+
+    uint32_t tm_frame_sequence_number = 0;
+    float old_grid_orientation = 0;
+
+    while(!stop_message[tid])
+    {
+        usleep(USLEEP_TM_SCIENCE);
+        tm_frame_sequence_number++;
+
+        TelemetryPacket tp(SYS_ID_ASP, TM_SCIENCE, tm_frame_sequence_number, 0x00000000);
+
+        uint8_t quality_bitfield = 0;
+        tp << quality_bitfield;
+
+        tp << py_image_counter << roll_image_counter;
+        py_image_counter = 0;
+        roll_image_counter = 0;
+
+        uint8_t num_fiducials = 0;
+        tp << num_fiducials;
+
+        float offset_pitch = 0, uncert_pitch = 0;
+        float offset_yaw = 0, uncert_yaw = 0;
+        tp << offset_pitch << uncert_pitch << offset_yaw << uncert_yaw;
+
+        float new_grid_orientation = 0;
+        float delta_grid_orientation = new_grid_orientation - old_grid_orientation;
+        if (delta_grid_orientation < 0) delta_grid_orientation += 360.;
+        tp << new_grid_orientation << delta_grid_orientation;
+        old_grid_orientation = new_grid_orientation;
+
+        float grid_rotation_rate = 0;
+        tp << grid_rotation_rate;
+
+        uint8_t py_histo[16];
+        memset(py_histo, 0, 16);
+        tp.append_bytes(py_histo, 16);
+
+        uint8_t roll_histo[16];
+        memset(roll_histo, 0, 16);
+        tp.append_bytes(roll_histo, 16);
+
+        uint16_t sun_center_x[3], sun_center_y[3];
+        memset(sun_center_x, 0, 3 * sizeof(uint16_t));
+        memset(sun_center_y, 0, 3 * sizeof(uint16_t));
+        for (int i = 0; i < 3; i++) {
+            tp << sun_center_x[i] * 10 << sun_center_y[i] * 10;
+        }
+
+        uint16_t fiducial_x[4], fiducial_y[4];
+        memset(fiducial_x, 0, 4 * sizeof(uint16_t));
+        memset(fiducial_y, 0, 4 * sizeof(uint16_t));
+        for (int i = 0; i < 4; i++) {
+            tp << fiducial_x[i] * 10 << fiducial_y[i] * 10;
+        }
+
+        tm_packet_queue << tp;
+    }
+
+    printf("TelemetryScience thread #%ld exiting\n", tid);
     started[tid] = false;
     pthread_exit( NULL );
 }
@@ -269,6 +393,25 @@ void queue_cmd_proc_ack_tmpacket( uint64_t error_code )
     tm_packet_queue << ack_tp;
 }
 
+void queue_settings_tmpacket()
+{
+    TelemetryPacket tp(SYS_ID_ASP, TM_SETTINGS, 0, 0x000000);
+
+    uint16_t last_parameter_table = 0;
+    tp << last_parameter_table;
+
+    uint8_t py_fps = 5;
+    uint8_t py_gain = 1;
+    uint16_t py_exposure = 1000;
+    tp << py_fps << py_gain << py_exposure;
+
+    uint8_t roll_fps = 5;
+    uint8_t roll_gain = 1;
+    uint16_t roll_exposure = 1000;
+    tp << roll_fps << roll_gain << roll_exposure;
+
+    tm_packet_queue << tp;
+}
 void *CommandHandlerThread(void *threadargs)
 {
     // command error code definition
@@ -333,7 +476,9 @@ void cmd_process_command(CommandPacket &cp)
 
 void start_all_workers()
 {
-    start_thread(TelemetryPackagerThread, NULL);
+    start_thread(TelemetryHousekeepingThread, NULL);
+    start_thread(TelemetryA2DThread, NULL);
+    start_thread(TelemetryScienceThread, NULL);
     start_thread(TelemetrySenderThread, NULL);
 }
 

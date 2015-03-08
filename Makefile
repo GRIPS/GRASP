@@ -42,3 +42,6 @@ main: main.cpp
 	make -C network all
 	$(CC) -o main main.cpp -Inetwork network/*.o -lpthread
 
+fake_tm: main.cpp
+	make -C network all
+	$(CC) -o fake_tm -DFAKE_TM main.cpp -Inetwork network/*.o -lpthread
