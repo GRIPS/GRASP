@@ -25,15 +25,15 @@
 #define PORT_TM       60501 // send telemetry to FC
 
 //GRIPS system ID
-#define SYS_ID_FC 0x00
+#define SYS_ID_FC  0x00
 #define SYS_ID_ASP 0x40
 
 //GRIPS telemetry types
-#define TM_ACK 0x01
+#define TM_ACK          0x01
 #define TM_HOUSEKEEPING 0x02
-#define TM_SETTINGS 0x03
-#define TM_A2D 0x04
-#define TM_SCIENCE 0x10
+#define TM_SETTINGS     0x03
+#define TM_A2D          0x04
+#define TM_SCIENCE      0x10
 
 //GRIPS commands, shared
 #define KEY_NULL                 0x00
@@ -233,7 +233,7 @@ void *TelemetryHousekeepingThread(void *threadargs)
         temp_roll = tm_frame_sequence_number + 1;
         temp_mb = tm_frame_sequence_number + 2;
         #endif
-        tp << temp_py * 10 << temp_roll * 10 << temp_mb * 10;
+        tp << (uint16_t)(temp_py * 10) << (uint16_t)(temp_roll * 10) << (uint16_t)(temp_mb * 10);
 
         tm_packet_queue << tp;
     }
@@ -324,14 +324,14 @@ void *TelemetryScienceThread(void *threadargs)
         memset(sun_center_x, 0, 3 * sizeof(uint16_t));
         memset(sun_center_y, 0, 3 * sizeof(uint16_t));
         for (int i = 0; i < 3; i++) {
-            tp << sun_center_x[i] * 10 << sun_center_y[i] * 10;
+            tp << (uint16_t)(sun_center_x[i] * 10) << (uint16_t)(sun_center_y[i] * 10);
         }
 
         uint16_t fiducial_x[4], fiducial_y[4];
         memset(fiducial_x, 0, 4 * sizeof(uint16_t));
         memset(fiducial_y, 0, 4 * sizeof(uint16_t));
         for (int i = 0; i < 4; i++) {
-            tp << fiducial_x[i] * 10 << fiducial_y[i] * 10;
+            tp << (uint16_t)(fiducial_x[i] * 10) << (uint16_t)(fiducial_y[i] * 10);
         }
 
         tm_packet_queue << tp;
