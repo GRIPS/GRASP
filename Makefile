@@ -38,10 +38,10 @@ program:  $(SOURCES)
 install:
 	cp -f $(EXE) $(BIN_DIR) 
 
-main: main.cpp
+main: main.cpp oeb.o
 	make -C network all
-	$(CC) -o main main.cpp -Inetwork network/*.o -lpthread
+	$(CC) -o main main.cpp oeb.o -Inetwork network/*.o -lpthread
 
-fake_tm: main.cpp
+fake_tm: main.cpp oeb.o
 	make -C network all
-	$(CC) -o fake_tm -DFAKE_TM main.cpp -Inetwork network/*.o -lpthread
+	$(CC) -o fake_tm -DFAKE_TM main.cpp oeb.o -Inetwork network/*.o -lpthread

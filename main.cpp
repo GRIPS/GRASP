@@ -59,6 +59,8 @@
 #include "Telemetry.hpp"
 #include "types.hpp"
 
+#include "oeb.h"
+
 // global declarations
 uint8_t command_sequence_number = -1;
 uint8_t latest_command_key = 0xFF;
@@ -217,7 +219,7 @@ void *TelemetryHousekeepingThread(void *threadargs)
         usleep(USLEEP_TM_HOUSEKEEPING);
         tm_frame_sequence_number++;
 
-        TelemetryPacket tp(SYS_ID_ASP, TM_HOUSEKEEPING, tm_frame_sequence_number, 0x00000000);
+        TelemetryPacket tp(SYS_ID_ASP, TM_HOUSEKEEPING, tm_frame_sequence_number, oeb_clock());
 
         uint8_t status_bitfield = 0;
         #ifdef FAKE_TM
@@ -253,7 +255,7 @@ void *TelemetryA2DThread(void *threadargs)
         usleep(USLEEP_TM_A2D);
         tm_frame_sequence_number++;
 
-        TelemetryPacket tp(SYS_ID_ASP, TM_A2D, tm_frame_sequence_number, 0x00000000);
+        TelemetryPacket tp(SYS_ID_ASP, TM_A2D, tm_frame_sequence_number, oeb_clock());
 
         uint16_t a2d[32];
         memset(a2d, 0, 32 * sizeof(uint16_t));
@@ -285,7 +287,7 @@ void *TelemetryScienceThread(void *threadargs)
         usleep(USLEEP_TM_SCIENCE);
         tm_frame_sequence_number++;
 
-        TelemetryPacket tp(SYS_ID_ASP, TM_SCIENCE, tm_frame_sequence_number, 0x00000000);
+        TelemetryPacket tp(SYS_ID_ASP, TM_SCIENCE, tm_frame_sequence_number, oeb_clock());
 
         uint8_t quality_bitfield = 0;
         tp << quality_bitfield;
@@ -388,14 +390,14 @@ void *CommandListenerThread(void *threadargs)
 
 void queue_cmd_proc_ack_tmpacket( uint64_t error_code )
 {
-    TelemetryPacket ack_tp(SYS_ID_ASP, TM_ACK, command_sequence_number, 0x000000);
+    TelemetryPacket ack_tp(SYS_ID_ASP, TM_ACK, command_sequence_number, oeb_clock());
     ack_tp << error_code;
     tm_packet_queue << ack_tp;
 }
 
 void queue_settings_tmpacket()
 {
-    TelemetryPacket tp(SYS_ID_ASP, TM_SETTINGS, 0, 0x000000);
+    TelemetryPacket tp(SYS_ID_ASP, TM_SETTINGS, 0, oeb_clock());
 
     uint16_t last_parameter_table = 0;
     tp << last_parameter_table;
@@ -487,6 +489,8 @@ int main(void)
     // to catch a Ctrl-C or termination signal and clean up
     signal(SIGINT, &sig_handler);
     signal(SIGTERM, &sig_handler);
+
+    if(oeb_init() != 0) return 0;
 
     pthread_mutex_init(&mutexStartThread, NULL);
 
