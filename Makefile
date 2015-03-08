@@ -1,19 +1,22 @@
 include ARCH
 
 #CCfits = /usr/local/include/CCfits
+
+#ASPECT makefile settings
 CCfitslib = /usr/local/lib
-#CCfitslib=/home/grips/desktop
-CCfits=/home/grips/CCfits
-cfitsio=/home/grips/cfitsio
+CCfits=/usr/local/include/CCfits
+cfitsio=/usr/local/include
+#cfitsiolib=~/cfitsio
 
-
-# Modification of Makefile found in GRASPv0 folder.
-# Including the CCfits and cfitsio directories  
+#GRASI makefile settings
+#CCfits=/home/grips/CCfits
+#cfitsio=/home/grips/cfitsio
 
 all: program
 
 # Executable, Change this for new code names
-EXE = dv29
+EXE = grasp
+EXE_pb = grasp_pb
 #EXE = a_rel0
 #EXE = a7
 #EXE= fitsplay
@@ -21,12 +24,16 @@ EXE = dv29
 #include all .cpp files here
 #SOURCES = analysis_PY.cpp $(EXE).cpp
 SOURCES = a_PY.cpp $(EXE).cpp a_H.cpp control.cpp
+SOURCES_pb = a_PY.cpp $(EXE_pb).cpp a_H.cpp control.cpp
 
 clean:
 	rm $(EXE)
 
+grasp_pb: $(SOURCES)
+	$(CC)  $(RPATH) $(TARGET) $(CFLAGS) $(SOURCES_pb) -g -o $(EXE_pb) $(SOLIB) $(PVLIB)  -I$(CCfits) -I$(cfitsio) -I$(cfitsiolib) -L$(CCfitslib) -lCCfits $(IMLIB) 
+
 program:  $(SOURCES)
-	$(CC)  $(RPATH) $(TARGET) $(CFLAGS) $(SOURCES) -g -o $(EXE) $(SOLIB) $(PVLIB)  -I$(CCfits) -I$(cfitsio) -L$(CCfitslib) -lCCfits $(IMLIB) 
+	$(CC)  $(RPATH) $(TARGET) $(CFLAGS) $(SOURCES) -g -o $(EXE) $(SOLIB) $(PVLIB)  -I$(CCfits) -I$(cfitsio) -I$(cfitsiolib) -L$(CCfitslib) -lCCfits $(IMLIB) 
 
 install:
 	cp -f $(EXE) $(BIN_DIR) 
