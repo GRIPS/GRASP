@@ -12,6 +12,9 @@ cfitsio=/usr/local/include
 #CCfits=/home/grips/CCfits
 #cfitsio=/home/grips/cfitsio
 
+#Used for implicit compiling of C++ files
+CXXFLAGS = -Inetwork -Wall
+
 all: program
 
 # Executable, Change this for new code names
@@ -38,10 +41,10 @@ program:  $(SOURCES)
 install:
 	cp -f $(EXE) $(BIN_DIR) 
 
-main: main.cpp oeb.o
+main: main.o oeb.o
 	make -C network all
-	$(CC) -o main main.cpp oeb.o -Inetwork network/*.o -lpthread
+	$(CC) -o main main.o oeb.o -Inetwork network/*.o -lpthread
 
-fake_tm: main.cpp oeb.o
+fake_tm: main.o oeb.o
 	make -C network all
-	$(CC) -o fake_tm -DFAKE_TM main.cpp oeb.o -Inetwork network/*.o -lpthread
+	$(CC) -o fake_tm -DFAKE_TM main.o oeb.o -Inetwork network/*.o -lpthread

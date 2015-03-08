@@ -166,11 +166,11 @@ void *TelemetrySenderThread(void *threadargs)
     long tid = (long)((struct Thread_data *)threadargs)->thread_id;
     printf("TelemetrySender thread #%ld!\n", tid);
 
+/*
     char timestamp[14];
     char filename[128];
     std::ofstream log;
 
-/*
     if (LOG_PACKETS) {
         writeCurrentUT(timestamp);
         sprintf(filename, "%slog_tm_%s.bin", SAVE_LOCATION, timestamp);
