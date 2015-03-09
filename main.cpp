@@ -14,6 +14,7 @@
 #define USLEEP_TM_SCIENCE      1000000 // period for adding science telemetry packets to queue
 #define USLEEP_UDP_LISTEN         1000 // safety measure in case UDP listening is changed to non-blocking
 #define USLEEP_MAIN               5000 // period for checking for new commands
+#define USLEEP_IRS              100000 // cadence for checking IR sensor
 
 //IP addresses
 #define IP_FC      "192.168.2.100"
@@ -70,6 +71,7 @@ uint8_t latest_system_id = 0xFF;
 uint8_t latest_command_key = 0xFF;
 uint8_t py_image_counter = 0;
 uint8_t roll_image_counter = 0;
+float grid_rotation_rate = -1;
 
 TelemetryPacketQueue tm_packet_queue; //for sending
 CommandPacketQueue cm_packet_queue; //for receiving
@@ -110,6 +112,8 @@ void cmd_process_command(CommandPacket &cp);
 void *CommandHandlerThread(void *threadargs);
 void queue_cmd_proc_ack_tmpacket( uint64_t error_code );
 void queue_settings_tmpacket();
+
+void *IRSensorThread(void *threadargs);
 
 template <class T>
 bool set_if_different(T& variable, T value); //returns true if the value is different
@@ -189,7 +193,7 @@ void *TelemetrySenderThread(void *threadargs)
             TelemetryPacket tp(NULL);
             tm_packet_queue >> tp;
             telSender.send( &tp );
-            std::cout << "TelemetrySender:" << tp << std::endl;
+            //std::cout << "TelemetrySender:" << tp << std::endl;
 /*
             if (LOG_PACKETS && log.is_open()) {
                 uint16_t length = tp.getLength();
@@ -313,7 +317,6 @@ void *TelemetryScienceThread(void *threadargs)
         tp << new_grid_orientation << delta_grid_orientation;
         old_grid_orientation = new_grid_orientation;
 
-        float grid_rotation_rate = 0;
         tp << grid_rotation_rate;
 
         uint8_t py_histo[16];
@@ -418,6 +421,7 @@ void queue_settings_tmpacket()
 
     tm_packet_queue << tp;
 }
+
 void *CommandHandlerThread(void *threadargs)
 {
     // command error code definition
@@ -511,6 +515,39 @@ void *CommandHandlerThread(void *threadargs)
     pthread_exit(NULL);
 }
 
+void *IRSensorThread(void *threadargs)
+{
+    long tid = (long)((struct Thread_data *)threadargs)->thread_id;
+    printf("IRSensor thread #%ld!\n", tid);
+
+    uint64_t old_trigger_time = oeb_get_irs();
+    uint64_t new_trigger_time = 0;
+    uint64_t delta = 1;
+    float local_grid_rotation_rate = -1;
+
+    while(!stop_message[tid])
+    {
+        usleep(USLEEP_IRS);
+        new_trigger_time = oeb_get_irs();
+        if (new_trigger_time > old_trigger_time) {
+            delta = new_trigger_time - old_trigger_time;
+
+            //Assuming four pulses per full rotation
+            local_grid_rotation_rate = 0.25 / (delta * 1e-7 / 60);
+
+            //Reject anomalous readings
+            if (local_grid_rotation_rate < 30) {
+                grid_rotation_rate = local_grid_rotation_rate;
+                old_trigger_time = new_trigger_time;
+            }
+        }
+    }
+
+    printf("IRSensor thread #%ld exiting\n", tid);
+    started[tid] = false;
+    pthread_exit( NULL );
+}
+
 void start_thread(void *(*routine) (void *), const Thread_data *tdata)
 {
     pthread_mutex_lock(&mutexStartThread);
@@ -586,6 +623,7 @@ void start_all_workers()
     start_thread(TelemetryA2DThread, NULL);
     start_thread(TelemetryScienceThread, NULL);
     start_thread(TelemetrySenderThread, NULL);
+    start_thread(IRSensorThread, NULL);
 }
 
 int main(void)
