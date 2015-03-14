@@ -10,7 +10,7 @@
 #define USLEEP_CMD_SEND           5000 // period for popping off the command queue
 #define USLEEP_TM_SEND           50000 // period for popping off the telemetry queue
 #define USLEEP_TM_HOUSEKEEPING 5000000 // period for adding housekeeping telemetry packets to queue
-#define USLEEP_TM_A2D          5000000 // period for adding A2D telemetry packets to queue
+#define USLEEP_TM_A2D          1000000 // period for adding A2D telemetry packets to queue
 #define USLEEP_TM_SCIENCE      1000000 // period for adding science telemetry packets to queue
 #define USLEEP_UDP_LISTEN         1000 // safety measure in case UDP listening is changed to non-blocking
 #define USLEEP_MAIN               5000 // period for checking for new commands
@@ -64,6 +64,7 @@
 #include "types.hpp"
 
 #include "oeb.h"
+#include "dmm.h"
 
 // global declarations
 uint8_t command_sequence_number = -1;
@@ -72,6 +73,7 @@ uint8_t latest_command_key = 0xFF;
 uint8_t py_image_counter = 0;
 uint8_t roll_image_counter = 0;
 float grid_rotation_rate = -1;
+struct dmminfo DMM1;
 
 TelemetryPacketQueue tm_packet_queue; //for sending
 CommandPacketQueue cm_packet_queue; //for receiving
@@ -258,21 +260,28 @@ void *TelemetryA2DThread(void *threadargs)
 
     uint32_t tm_frame_sequence_number = 0;
 
+    #ifndef FAKE_TM
+    InitDMM1();
+    #endif
+
     while(!stop_message[tid])
     {
         usleep(USLEEP_TM_A2D);
-        tm_frame_sequence_number++;
 
+        #ifndef FAKE_TM
+        DMMUpdateADC(&DMM1);
+        #endif
+
+        tm_frame_sequence_number++;
         TelemetryPacket tp(SYS_ID_ASP, TM_A2D, tm_frame_sequence_number, oeb_get_clock());
 
-        uint16_t a2d[32];
-        memset(a2d, 0, 32 * sizeof(uint16_t));
-        #ifdef FAKE_TM
         for (int i = 0; i < 32; i++) {
-            a2d[i] = tm_frame_sequence_number + i;
+            #ifndef FAKE_TM
+            tp << (uint16_t)DMM1.ain[i];
+            #else
+            tp << (uint16_t)(tm_frame_sequence_number + i);
+            #endif
         }
-        #endif
-        tp.append_bytes(a2d, 32*sizeof(uint16_t));
 
         tm_packet_queue << tp;
     }
@@ -633,6 +642,7 @@ int main(void)
     signal(SIGTERM, &sig_handler);
 
     if(oeb_init() != 0) return 0;
+    if(iopl(3) != 0) return 0;
 
     pthread_mutex_init(&mutexStartThread, NULL);
 
