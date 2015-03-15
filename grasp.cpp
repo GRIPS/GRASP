@@ -107,6 +107,8 @@
 #include "a_PY.h"
 #include "a_H.h" 
 #include "control.h"
+#include "network/Telemetry.hpp"
+#include "network/UDPSender.hpp"
 #include "oeb.h"
 
 //PvApi libraries
@@ -357,8 +359,7 @@ bool getTemp(tCamera* Camera){
 
                                 //Send temperatures on a loopback to be received by main process
                                 TelemetrySender telSender("127.0.0.1", 44444);
-                                TelemetryPacket tp(0x4F, Camera->UID == PY_cam_ID ? 0 : 1, 0,
-                                                   Camera->UID == PY_cam_ID ? oeb_get_pyc() : oeb_get_rc());
+                                TelemetryPacket tp(0x4F, Camera->UID == PY_cam_ID ? 0 : 1, 0, 0);
                                 tp << (float)T_MB;
                                 telSender.send(&tp);
 

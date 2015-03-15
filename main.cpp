@@ -249,7 +249,7 @@ void *TelemetryHousekeepingThread(void *threadargs)
         temp_roll = tm_frame_sequence_number + 1;
         temp_mb = tm_frame_sequence_number + 2;
         #endif
-        tp << (uint16_t)(temp_py * 10) << (uint16_t)(temp_roll * 10) << (uint16_t)(temp_mb * 10);
+        tp << (int16_t)(temp_py * 100) << (int16_t)(temp_roll * 100) << (int16_t)(temp_mb * 100);
 
         tm_packet_queue << tp;
     }
@@ -592,12 +592,12 @@ void *GRASPReceiverThread(void *threadargs)
                 tp >> temp_roll;
                 break;
             default:
+                break;
         }
-
     }
 
     printf("GRASPReceiver thread #%ld exiting\n", tid);
-    telReceiver.close();
+    telReceiver.close_connection();
     started[tid] = false;
     pthread_exit( NULL );
 }
