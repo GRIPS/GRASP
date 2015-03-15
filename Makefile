@@ -26,8 +26,8 @@ EXE_pb = grasp_pb
 
 #include all .cpp files here
 #SOURCES = analysis_PY.cpp $(EXE).cpp
-SOURCES = a_PY.cpp $(EXE).cpp a_H.cpp control.cpp
-SOURCES_pb = a_PY.cpp $(EXE_pb).cpp a_H.cpp control.cpp
+SOURCES = a_PY.cpp $(EXE).cpp a_H.cpp control.cpp oeb.o
+SOURCES_pb = a_PY.cpp $(EXE_pb).cpp a_H.cpp control.cpp oeb.o
 
 clean:
 	rm -f $(EXE)

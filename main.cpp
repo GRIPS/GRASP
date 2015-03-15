@@ -9,7 +9,7 @@
 //Sleep settings (microseconds)
 #define USLEEP_CMD_SEND           5000 // period for popping off the command queue
 #define USLEEP_TM_SEND           50000 // period for popping off the telemetry queue
-#define USLEEP_TM_HOUSEKEEPING 5000000 // period for adding housekeeping telemetry packets to queue
+#define USLEEP_TM_HOUSEKEEPING 1000000 // period for adding housekeeping telemetry packets to queue
 #define USLEEP_TM_A2D          1000000 // period for adding A2D telemetry packets to queue
 #define USLEEP_TM_SCIENCE      1000000 // period for adding science telemetry packets to queue
 #define USLEEP_UDP_LISTEN         1000 // safety measure in case UDP listening is changed to non-blocking
@@ -74,6 +74,7 @@ uint8_t py_image_counter = 0;
 uint8_t roll_image_counter = 0;
 float grid_rotation_rate = -1;
 struct dmminfo DMM1;
+float temp_py = 0, temp_roll = 0, temp_mb = 0;
 
 TelemetryPacketQueue tm_packet_queue; //for sending
 CommandPacketQueue cm_packet_queue; //for receiving
@@ -116,6 +117,8 @@ void queue_cmd_proc_ack_tmpacket( uint64_t error_code );
 void queue_settings_tmpacket();
 
 void *IRSensorThread(void *threadargs);
+
+void *GRASPReceiverThread(void *threadargs);
 
 template <class T>
 bool set_if_different(T& variable, T value); //returns true if the value is different
@@ -232,13 +235,16 @@ void *TelemetryHousekeepingThread(void *threadargs)
         TelemetryPacket tp(SYS_ID_ASP, TM_HOUSEKEEPING, tm_frame_sequence_number, oeb_get_clock());
 
         uint8_t status_bitfield = 0;
-        #ifdef FAKE_TM
+        #ifndef FAKE_TM
+
+        #else
         status_bitfield = (tm_frame_sequence_number % 2) ? 0x7 : 0x0;
         #endif
         tp << status_bitfield << latest_command_key;
 
-        int16_t temp_py = 0, temp_roll = 0, temp_mb = 0;
-        #ifdef FAKE_TM
+        #ifndef FAKE_TM
+
+        #else
         temp_py = tm_frame_sequence_number;
         temp_roll = tm_frame_sequence_number + 1;
         temp_mb = tm_frame_sequence_number + 2;
@@ -557,6 +563,44 @@ void *IRSensorThread(void *threadargs)
     pthread_exit( NULL );
 }
 
+void *GRASPReceiverThread(void *threadargs)
+{
+    long tid = (long)((struct Thread_data *)threadargs)->thread_id;
+    printf("GRASPReceiver thread #%ld!\n", tid);
+
+    TelemetryReceiver telReceiver(44444);
+    telReceiver.init_connection();
+
+    while(!stop_message[tid])
+    {
+        unsigned int packet_length;
+
+        usleep(USLEEP_UDP_LISTEN);
+        packet_length = telReceiver.listen( );
+        uint8_t *packet;
+        packet = new uint8_t[packet_length];
+        telReceiver.get_packet( packet );
+
+        TelemetryPacket tp( packet, packet_length );
+
+        switch(tp.getTmType())
+        {
+            case 0: //Pitch-yaw camera
+                tp >> temp_py;
+                break;
+            case 1: //Roll camera
+                tp >> temp_roll;
+                break;
+            default:
+        }
+
+    }
+
+    printf("GRASPReceiver thread #%ld exiting\n", tid);
+    telReceiver.close();
+    started[tid] = false;
+    pthread_exit( NULL );
+}
 void start_thread(void *(*routine) (void *), const Thread_data *tdata)
 {
     pthread_mutex_lock(&mutexStartThread);
@@ -633,6 +677,7 @@ void start_all_workers()
     start_thread(TelemetryScienceThread, NULL);
     start_thread(TelemetrySenderThread, NULL);
     start_thread(IRSensorThread, NULL);
+    start_thread(GRASPReceiverThread, NULL);
 }
 
 int main(void)
@@ -683,4 +728,3 @@ int main(void)
 
     return 0;
 }
-
