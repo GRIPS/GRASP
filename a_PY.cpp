@@ -58,6 +58,8 @@ bool init_params(params& val, int w_in, int n_in){
 
 	val.width=w_in;  
 	val.nel=n_in;
+
+	val.a_timer=false;
 	
 	//change these to load from parameter table
 	val.Rs= 100;
