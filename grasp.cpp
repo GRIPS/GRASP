@@ -878,7 +878,7 @@ void spawn_thread(int x){
 			pthread_attr_t attr;											//attribute object				
 			pthread_attr_init(&attr);
 			pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED); //create thread in detached state
-			thread_err = pthread_create(&CAMERAS[i].thread[CAMERAS[i].idx], &attr, snap_thread, (void *)i);
+			thread_err = pthread_create(&CAMERAS[i].thread[CAMERAS[i].idx], &attr, snap_thread, (void *)&i);
 			pthread_attr_destroy(&attr);
 			if(thread_err){
 					cout<<"didn't create thread for camera "<<CAMERAS[i].UID<<" frame "<<CAMERAS[i].idx<<endl;
@@ -909,7 +909,7 @@ void spawn_thread(int x){
   ========================================================================================== */
 void *snap_thread(void *cam){
 
- int i = *(int *)(&cam);
+ int i = *(int *)(cam);
 
 
 	if(!PAUSEPROGRAM && !TERMINATE) {
