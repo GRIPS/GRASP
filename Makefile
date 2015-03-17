@@ -15,7 +15,7 @@ cfitsio=/usr/local/include
 #Used for implicit compiling of C++ files
 CXXFLAGS = -Inetwork -Idmm -Wall
 
-all: program
+all: program main
 
 # Executable, Change this for new code names
 EXE = grasp

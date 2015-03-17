@@ -136,7 +136,6 @@
 using namespace std; //the global namespace, CCfits used loacally in savefits
 
 //#define	_STDCALL
-#define	TRUE		0
 #define	FRAMESCOUNT	5
 // _____________________________________________________________________________________________
 
@@ -160,6 +159,7 @@ struct tCamera {
 	int				TicksPerSec;
 	int				TicksUntilCapture;
 	unsigned long	ExposureLength;
+	unsigned long	Gain;
 	int				BufferIndex;
 	float			FrameHeight;
 	float			FrameWidth;
@@ -214,8 +214,11 @@ bool PAUSEPROGRAM = false;
 tCamera GCamera;
 tCamera CAMERAS[MAXNUMOFCAMERAS];
 
-unsigned long PY_cam_ID = 158434;
-unsigned long H_cam_ID = 142974;
+#define PY_cam_ID 158434
+#define H_cam_ID 142974
+
+#define SAVE_1_OF_EVERY_N 10
+
 // __________________________________________________________________________________________end
 
 
@@ -277,7 +280,7 @@ int main(int argc, char* argv[]) {
 	// Initialize the API.
 	if(!PvInitialize()) {
 
-		SetConsoleCtrlHandler(CtrlCHandler, TRUE);
+		SetConsoleCtrlHandler(CtrlCHandler, 0);
 
 		PvLinkCallbackRegister(CameraEventCB, ePvLinkAdd, NULL);
 		PvLinkCallbackRegister(CameraEventCB, ePvLinkRemove, NULL);
@@ -527,9 +530,23 @@ bool CameraSetup(tCamera* Camera, int cam) {
 		init_prog_c(con);
 
 		if(con.def){
-				cout<<"Default settings: 5 im/s, 20000us, saving\n";
+                    switch(Camera->UID) {
+                        case PY_cam_ID:
+                            cout<<"Default PY settings: 5 im/s, 20000us, 0dB gain, saving\n";
+                            Camera->ExposureLength = 20000;
+                            Camera->Gain = 0;
+                            break;
+                        case H_cam_ID:
+                            cout<<"Default H settings: 5 im/s, 4000us, 0dB gain, saving\n";
+                            Camera->ExposureLength = 4000;
+                            Camera->Gain = 0;
+                            break;
+                        default:
+                            cout<<"Default settings: 5 im/s, 20000us, 0dB gain, saving\n";
+                            Camera->ExposureLength = 20000;
+                            Camera->Gain = 0;
+                    }
 				Camera->TicksPerSec = 5;
-				Camera->ExposureLength = 20000;
 				//Camera->WantToSave = false;
 				Camera->WantToSave = true;
 		} else {
@@ -541,7 +558,10 @@ bool CameraSetup(tCamera* Camera, int cam) {
 				printf("\nHow long should the exposure value be in microseconds?\n");
 				printf("Upper limit based on pictures per second: %d\n", 1000000 / Camera->TicksPerSec);
 				printf("Exposure time: ");
-				scanf("%lu", &Camera->ExposureLength); 
+				scanf("%lu", &Camera->ExposureLength);
+
+				printf("Gain (0 to 29): ");
+				scanf("%lu", &Camera->Gain); 
 
 				printf("\nWould you like to save the pictures to the hard drive? (y/n): ");
 				if(YesOrNo())
@@ -693,7 +713,8 @@ bool CameraStart(tCamera* Camera) {
 
 	// Determine how big the frame buffers should be and set the exposure value.
 	if(!PvAttrUint32Get(Camera->Handle, "TotalBytesPerFrame", &FrameSize)
-	   && !PvAttrUint32Set(Camera->Handle, "ExposureValue", Camera->ExposureLength)) {
+	   && !PvAttrUint32Set(Camera->Handle, "ExposureValue", Camera->ExposureLength)
+	   && !PvAttrUint32Set(Camera->Handle, "GainValue", Camera->Gain)) {
 
 		Camera->FrameHeight = fabs(sqrt(.75 * FrameSize));
 		Camera->FrameWidth = FrameSize / Camera->FrameHeight;
@@ -1112,11 +1133,11 @@ void ProcessPY(int i, valarray<unsigned char> imarr) {
 	if(CAMERAS[i].WantToSave) {
 		//create filename					
 		ostringstream filename;
-		//filename << "images/" << CAMERAS[i].UID << "_" << CAMERAS[i].TimeStamps[j]<<"_"<< CAMERAS[i].savecount<<".fits";	
-		filename << "images/" << CAMERAS[i].UID << "_" << CAMERAS[i].BufferIndex<<".fits"; //circular filename buffer
+		filename << "images/" << CAMERAS[i].UID << "_" << CAMERAS[i].TimeStamps[CAMERAS[i].BufferIndex]<<"_"<< CAMERAS[i].savecount<<".fits";	
+		//filename << "images/" << CAMERAS[i].UID << "_" << CAMERAS[i].BufferIndex<<".fits"; //circular filename buffer
 		if(con.c_timer)
 			tester(1,t,0);										
-		saveim(i, imarr, filename.str().c_str(), im, val);
+                if((CAMERAS[i].savecount % SAVE_1_OF_EVERY_N) == 0) saveim(i, imarr, filename.str().c_str(), im, val);
 		CAMERAS[i].savecount++;
 		if(con.c_timer){
 			cout<<"Saving ";		
@@ -1179,13 +1200,13 @@ void ProcessH(int i, valarray<unsigned char> imarr){
 	if(CAMERAS[i].WantToSave) {
 		//create filename					
 		ostringstream filename;
-		CAMERAS[i].savecount++;
-		//filename << "images/" << CAMERAS[i].UID << "_" << CAMERAS[i].TimeStamps[j]
-		//									<<"_"<< CAMERAS[i].savecount<<".fits";	
-		filename << "images/" << CAMERAS[i].UID << "_" << CAMERAS[i].BufferIndex<<".fits";
+		filename << "images/" << CAMERAS[i].UID << "_" << CAMERAS[i].TimeStamps[CAMERAS[i].BufferIndex]
+											<<"_"<< CAMERAS[i].savecount<<".fits";	
+		//filename << "images/" << CAMERAS[i].UID << "_" << CAMERAS[i].BufferIndex<<".fits";
 		if(con.c_timer)
 				tester(1,t,0);
-		saveim_H(i, imarr, filename.str().c_str(), im, val); //set-up as bool, return true if ok, error msg if not
+		if((CAMERAS[i].savecount % SAVE_1_OF_EVERY_N) == 0) saveim_H(i, imarr, filename.str().c_str(), im, val); //set-up as bool, return true if ok, error msg if not
+		CAMERAS[i].savecount++;
 		if(con.c_timer){
 				cout<<"Saving ";		
 				tester(2,t,0);
@@ -1237,6 +1258,7 @@ bool saveim(int i, valarray<unsigned char> imarr, const char* filename, info im,
 		pFits->pHDU().addKey("Save Count",(int)CAMERAS[i].savecount, "Num of Saved Images");
 		pFits->pHDU().addKey("Snap Count",(int)CAMERAS[i].snapcount, "Num of SNAPS");
 		pFits->pHDU().addKey("Exposure",(long)CAMERAS[i].ExposureLength, "for cameanalyzera");
+		pFits->pHDU().addKey("Gain",(long)CAMERAS[i].Gain, "Gain (dB)");
 		pFits->pHDU().addKey("filename", filename, "Name of the file");
 
 		//switch to make the appropriate ascii tables for PY or H from their info structs
@@ -1794,6 +1816,7 @@ void DisplayParameters() {
 		printf("----------\n");
 		printf("Images per second: %d\n", CAMERAS[i].TicksPerSec);
 		printf("Exposure time in microseconds: %lu\n", CAMERAS[i].ExposureLength);
+		printf("Gain (dB): %lu\n", CAMERAS[i].Gain);
 		if(CAMERAS[i].PauseCapture == true)
 			printf("Camera capture paused? true\n");
 		else
