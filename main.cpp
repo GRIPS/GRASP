@@ -17,13 +17,19 @@
 #define USLEEP_IRS              100000 // cadence for checking IR sensor
 
 //IP addresses
-#define IP_FC      "192.168.2.100"
-
+#define IP_FC "192.168.2.100"
 #define IP_LOOPBACK "127.0.0.1"
+#define IP_TM IP_FC
 
 //UDP ports, aside from PORT_IMAGE, which is TCP
 #define PORT_CMD      50501 // commands, FC (receive)
 #define PORT_TM       60501 // send telemetry to FC
+
+//Acknowledgement error codes
+#define ACK_NOERROR 0x00
+#define ACK_BADCRC  0x03
+#define ACK_BADSYS  0x04
+#define ACK_BADCOM  0x05
 
 //GRIPS system ID
 #define SYS_ID_FC  0x00
@@ -38,6 +44,7 @@
 #define TM_SETTINGS     0x03
 #define TM_A2D          0x04
 #define TM_SCIENCE      0x10
+#define TM_IMAGE        0x20
 
 //GRIPS commands, shared
 #define KEY_NULL                 0x00
@@ -113,7 +120,7 @@ void *TelemetryScienceThread(void *threadargs);
 void *CommandListenerThread(void *threadargs);
 void cmd_process_command(CommandPacket &cp);
 void *CommandHandlerThread(void *threadargs);
-void queue_cmd_proc_ack_tmpacket( uint64_t error_code );
+void queue_cmd_proc_ack_tmpacket( uint8_t error_code, uint64_t response );
 void queue_settings_tmpacket();
 
 void *IRSensorThread(void *threadargs);
@@ -171,7 +178,7 @@ void kill_all_threads()
 }
 
 void *TelemetrySenderThread(void *threadargs)
-{    
+{
     long tid = (long)((struct Thread_data *)threadargs)->thread_id;
     printf("TelemetrySender thread #%ld!\n", tid);
 
@@ -188,7 +195,7 @@ void *TelemetrySenderThread(void *threadargs)
         log.open(filename, std::ofstream::binary);
     }
 */
-    TelemetrySender telSender(IP_FC, (unsigned short) PORT_TM);
+    TelemetrySender telSender(IP_TM, (unsigned short) PORT_TM);
 
     while(!stop_message[tid])
     {
@@ -365,7 +372,7 @@ void *TelemetryScienceThread(void *threadargs)
 }
 
 void *CommandListenerThread(void *threadargs)
-{  
+{
     long tid = (long)((struct Thread_data *)threadargs)->thread_id;
     printf("CommandListener thread #%ld!\n", tid);
 
@@ -398,6 +405,7 @@ void *CommandListenerThread(void *threadargs)
             cm_packet_queue << command_packet;
         } else {
             printf("INVALID checksum");
+            queue_cmd_proc_ack_tmpacket(ACK_BADCRC, 0xFFFFFFFF);
         }
         printf("\n");
 
@@ -410,10 +418,10 @@ void *CommandListenerThread(void *threadargs)
     pthread_exit( NULL );
 }
 
-void queue_cmd_proc_ack_tmpacket( uint64_t error_code )
+void queue_cmd_proc_ack_tmpacket( uint8_t error_code, uint64_t response )
 {
-    TelemetryPacket ack_tp(latest_system_id, TM_ACK, command_sequence_number, oeb_get_clock());
-    ack_tp << error_code;
+    TelemetryPacket ack_tp(SYS_ID_ASP, TM_ACK, command_sequence_number, oeb_get_clock());
+    ack_tp << error_code << response;
     tm_packet_queue << ack_tp;
 }
 
@@ -445,10 +453,11 @@ void *CommandHandlerThread(void *threadargs)
     // 0x0001       command not implemented
     // 0xEEEE       unknown command
     // 0xFFFF       unknown system ID
-    // 
+    //
     long tid = (long)((struct Thread_data *)threadargs)->thread_id;
     struct Thread_data *my_data;
-    uint64_t error_code = 0x0001;
+    uint8_t error_code = 0xFF; //command not implemented
+    uint64_t response = 0;
     my_data = (struct Thread_data *) threadargs;
 
     uint64_t value = 0;
@@ -497,7 +506,8 @@ void *CommandHandlerThread(void *threadargs)
                     break;
                 default:
                     std::cerr << "Unknown command\n";
-                    error_code = 0xEEEE; //unknown command
+                    error_code = ACK_BADCOM; //unknown command
+                    response = my_data->command_key;
             } //switch for command key
             break;
         case SYS_ID_PYC:
@@ -516,15 +526,17 @@ void *CommandHandlerThread(void *threadargs)
                     break;
                 default:
                     std::cerr << "Unknown command\n";
-                    error_code = 0xEEEE; //unknown command
+                    error_code = ACK_BADCOM; //unknown command
+                    response = my_data->command_key;
             } //switch for command key
             break;
         default:
             std::cerr << "Unknown system ID\n";
-            error_code = 0xFFFF; //unknown system ID
+            error_code = ACK_BADSYS; //unknown system ID
+            response = my_data->system_id;
     } //switch for system ID
 
-    queue_cmd_proc_ack_tmpacket( error_code );
+    queue_cmd_proc_ack_tmpacket( error_code, response );
 
     started[tid] = false;
     pthread_exit(NULL);
@@ -648,7 +660,7 @@ void cmd_process_command(CommandPacket &cp)
     switch(tdata.command_key)
     {
         case 0x00:
-            queue_cmd_proc_ack_tmpacket(0);
+            queue_cmd_proc_ack_tmpacket(0, 0);
             break;
         case 0xF0:
             kill_all_workers();
@@ -681,7 +693,7 @@ void start_all_workers()
 }
 
 int main(void)
-{  
+{
     // to catch a Ctrl-C or termination signal and clean up
     signal(SIGINT, &sig_handler);
     signal(SIGTERM, &sig_handler);
