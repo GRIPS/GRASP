@@ -698,8 +698,14 @@ int main(void)
     signal(SIGINT, &sig_handler);
     signal(SIGTERM, &sig_handler);
 
-    if(oeb_init() != 0) return 0;
-    if(iopl(3) != 0) return 0;
+    // elevate privilege level
+    if(iopl(3) != 0) {
+        std::cerr << "Need to run with root permissions (e.g., sudo)\n";
+        return -1;
+    }
+
+    // initialize odds & ends board
+    if(oeb_init() != 0) return 1;
 
     pthread_mutex_init(&mutexStartThread, NULL);
 
@@ -717,7 +723,7 @@ int main(void)
     while(g_running){
         usleep(USLEEP_MAIN);
 
-        // check if new command have been added to command queue and service them
+        // check if new commands have been added to command queue and service them
         if (!cm_packet_queue.empty()){
             //printf("size of queue: %zu\n", cm_packet_queue.size());
             CommandPacket cp(NULL);
