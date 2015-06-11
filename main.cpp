@@ -3,10 +3,8 @@
 
 #define SAVE_LOCATION "./"
 
-//Sleep settings (seconds)
-#define SLEEP_KILL             2 // waits when killing all threads
-
 //Sleep settings (microseconds)
+#define USLEEP_KILL            3000000 // waits when killing all threads
 #define USLEEP_CMD_SEND           5000 // period for popping off the command queue
 #define USLEEP_TM_SEND           50000 // period for popping off the telemetry queue
 #define USLEEP_TM_HOUSEKEEPING 1000000 // period for adding housekeeping telemetry packets to queue
@@ -56,7 +54,6 @@
 #include <stdio.h>      /* for printf() and fprintf() */
 #include <pthread.h>    /* for multithreading */
 #include <stdlib.h>     /* for atoi() and exit() */
-#include <unistd.h>     /* for sleep()  */
 #include <signal.h>     /* for signal() */
 #include <math.h>
 #include <ctime>        /* time_t, struct tm, time, gmtime */
@@ -70,6 +67,8 @@
 #include "Telemetry.hpp"
 #include "types.hpp"
 
+#include "main.hpp"
+#include "camera.hpp"
 #include "oeb.h"
 #include "dmm.h"
 
@@ -126,6 +125,7 @@ void queue_settings_tmpacket();
 void *IRSensorThread(void *threadargs);
 
 void *GRASPReceiverThread(void *threadargs);
+void *CameraMainThread(void *threadargs);
 
 template <class T>
 bool set_if_different(T& variable, T value); //returns true if the value is different
@@ -149,6 +149,20 @@ bool set_if_different(T& variable, T value)
     } else return false;
 }
 
+// Forces a sleep through any interrupts
+// This is necessary because PvAPI creates a 1-second SIGALRM timer
+// http://stackoverflow.com/questions/13865166/cant-pause-a-thread-in-conjunction-with-third-party-library
+int usleep_force(uint64_t microseconds)
+{
+    struct timespec amount, remaining;
+    amount.tv_nsec = (microseconds % 1000000) * 1000;
+    amount.tv_sec = microseconds / 1000000;
+    while (nanosleep(&amount, &remaining) == -1) {
+        amount = remaining;
+    }
+    return 0;
+}
+
 void kill_all_workers()
 {
     for(int i = 0; i < MAX_THREADS; i++ ){
@@ -156,7 +170,7 @@ void kill_all_workers()
             stop_message[i] = true;
         }
     }
-    sleep(SLEEP_KILL);
+    usleep_force(USLEEP_KILL);
     for(int i = 0; i < MAX_THREADS; i++ ){
         if ((i != tid_listen) && started[i]) {
             printf("Quitting thread %i, quitting status is %i\n", i, pthread_cancel(threads[i]));
@@ -199,7 +213,7 @@ void *TelemetrySenderThread(void *threadargs)
 
     while(!stop_message[tid])
     {
-        usleep(USLEEP_TM_SEND);
+        usleep_force(USLEEP_TM_SEND);
 
         if( !tm_packet_queue.empty() ){
             TelemetryPacket tp(NULL);
@@ -236,7 +250,7 @@ void *TelemetryHousekeepingThread(void *threadargs)
 
     while(!stop_message[tid])
     {
-        usleep(USLEEP_TM_HOUSEKEEPING);
+        usleep_force(USLEEP_TM_HOUSEKEEPING);
         tm_frame_sequence_number++;
 
         TelemetryPacket tp(SYS_ID_ASP, TM_HOUSEKEEPING, tm_frame_sequence_number, oeb_get_clock());
@@ -279,7 +293,7 @@ void *TelemetryA2DThread(void *threadargs)
 
     while(!stop_message[tid])
     {
-        usleep(USLEEP_TM_A2D);
+        usleep_force(USLEEP_TM_A2D);
 
         #ifndef FAKE_TM
         DMMUpdateADC(&DMM1);
@@ -314,7 +328,7 @@ void *TelemetryScienceThread(void *threadargs)
 
     while(!stop_message[tid])
     {
-        usleep(USLEEP_TM_SCIENCE);
+        usleep_force(USLEEP_TM_SCIENCE);
         tm_frame_sequence_number++;
 
         TelemetryPacket tp(SYS_ID_ASP, TM_SCIENCE, tm_frame_sequence_number, oeb_get_clock());
@@ -385,7 +399,7 @@ void *CommandListenerThread(void *threadargs)
     {
         unsigned int packet_length;
 
-        usleep(USLEEP_UDP_LISTEN);
+        usleep_force(USLEEP_UDP_LISTEN);
         packet_length = comReceiver.listen( );
         printf("CommandListenerThread: %i bytes, ", packet_length);
         uint8_t *packet;
@@ -554,7 +568,7 @@ void *IRSensorThread(void *threadargs)
 
     while(!stop_message[tid])
     {
-        usleep(USLEEP_IRS);
+        usleep_force(USLEEP_IRS);
         new_trigger_time = oeb_get_irs();
         if (new_trigger_time > old_trigger_time) {
             delta = new_trigger_time - old_trigger_time;
@@ -587,7 +601,7 @@ void *GRASPReceiverThread(void *threadargs)
     {
         unsigned int packet_length;
 
-        usleep(USLEEP_UDP_LISTEN);
+        usleep_force(USLEEP_UDP_LISTEN);
         packet_length = telReceiver.listen( );
         uint8_t *packet;
         packet = new uint8_t[packet_length];
@@ -613,6 +627,19 @@ void *GRASPReceiverThread(void *threadargs)
     started[tid] = false;
     pthread_exit( NULL );
 }
+
+void *CameraMainThread(void *threadargs)
+{
+    long tid = (long)((struct Thread_data *)threadargs)->thread_id;
+    printf("CameraMain thread #%ld!\n", tid);
+
+    camera_main(); // monitors g_running directly
+
+    printf("CameraMain thread #%ld exiting\n", tid);
+    started[tid] = false;
+    pthread_exit( NULL );
+}
+
 void start_thread(void *(*routine) (void *), const Thread_data *tdata)
 {
     pthread_mutex_lock(&mutexStartThread);
@@ -690,6 +717,7 @@ void start_all_workers()
     start_thread(TelemetrySenderThread, NULL);
     start_thread(IRSensorThread, NULL);
     start_thread(GRASPReceiverThread, NULL);
+    start_thread(CameraMainThread, NULL);
 }
 
 int main(void)
@@ -721,7 +749,7 @@ int main(void)
     start_all_workers();
 
     while(g_running){
-        usleep(USLEEP_MAIN);
+        usleep_force(USLEEP_MAIN);
 
         // check if new commands have been added to command queue and service them
         if (!cm_packet_queue.empty()){

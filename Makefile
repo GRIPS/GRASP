@@ -13,7 +13,7 @@ cfitsio=/usr/local/include
 #cfitsio=/home/grips/cfitsio
 
 #Used for implicit compiling of C++ files
-CXXFLAGS = -Inetwork -Idmm -Wall -pthread
+CXXFLAGS = -Inetwork -Idmm -Wall -pthread -I$(INC_DIR) $(FLAGS) -I$(CCfits)
 
 all: program main
 
@@ -35,20 +35,20 @@ clean:
 	rm -f main fake_tm
 
 grasp_pb: $(SOURCES)
-	$(CC)  $(RPATH) $(TARGET) $(CFLAGS) $(SOURCES_pb) -g -o $(EXE_pb) $(SOLIB) $(PVLIB)  -I$(CCfits) -I$(cfitsio) -I$(cfitsiolib) -L$(CCfitslib) -lCCfits $(IMLIB) 
+	$(CC)  $(RPATH) $(TARGET) $(CFLAGS) $(SOURCES_pb) -g -o $(EXE_pb) $(SOLIB) $(PVLIB)  -I$(CCfits) -I$(cfitsio) -I$(cfitsiolib) -L$(CCfitslib) -lCCfits $(IMLIB)
 
 program:  $(SOURCES)
-	$(CC)  $(RPATH) $(TARGET) $(CFLAGS) $(SOURCES) -g -o $(EXE) $(SOLIB) $(PVLIB)  -I$(CCfits) -I$(cfitsio) -I$(cfitsiolib) -L$(CCfitslib) -lCCfits $(IMLIB) 
+	$(CC)  $(RPATH) $(TARGET) $(CFLAGS) $(SOURCES) -g -o $(EXE) $(SOLIB) $(PVLIB)  -I$(CCfits) -I$(cfitsio) -I$(cfitsiolib) -L$(CCfitslib) -lCCfits $(IMLIB)
 
 install:
-	cp -f $(EXE) $(BIN_DIR) 
+	cp -f $(EXE) $(BIN_DIR)
 
 dmm.o: dmm/dmm.c dmm/dmm.h
 	$(CC) $(CXXFLAGS) -c $<
 
-main: main.o oeb.o dmm.o
+main: main.o oeb.o dmm.o camera.o a_PY.o a_H.o control.o
 	make -C network all
-	$(CC) -o main main.o oeb.o -Inetwork -Idmm network/*.o dmm.o -pthread
+	$(CC) -o main $^ -Inetwork -Idmm network/*.o -pthread -L$(CCfitslib) -lCCfits $(PVLIB) $(SOLIB) $(RPATH)
 
 main_fake_tm.o: main.cpp
 	$(CC) -c -o main_fake_tm.o main.cpp -DFAKE_TM $(CXXFLAGS)
