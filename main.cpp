@@ -739,10 +739,13 @@ int main(void)
 
     /* Last thing that main() should do */
     printf("Quitting and cleaning up.\n");
+
     /* wait for threads to finish */
     kill_all_threads();
     pthread_mutex_destroy(&mutexStartThread);
-    pthread_exit(NULL);
 
+    oeb_uninit();
+
+    pthread_exit(NULL);
     return 0;
 }

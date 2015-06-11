@@ -13,7 +13,7 @@ cfitsio=/usr/local/include
 #cfitsio=/home/grips/cfitsio
 
 #Used for implicit compiling of C++ files
-CXXFLAGS = -Inetwork -Idmm -Wall
+CXXFLAGS = -Inetwork -Idmm -Wall -pthread
 
 all: program main
 
@@ -48,7 +48,7 @@ dmm.o: dmm/dmm.c dmm/dmm.h
 
 main: main.o oeb.o dmm.o
 	make -C network all
-	$(CC) -o main main.o oeb.o -Inetwork -Idmm network/*.o dmm.o -lpthread
+	$(CC) -o main main.o oeb.o -Inetwork -Idmm network/*.o dmm.o -pthread
 
 main_fake_tm.o: main.cpp
 	$(CC) -c -o main_fake_tm.o main.cpp -DFAKE_TM $(CXXFLAGS)

@@ -29,6 +29,8 @@
 #define put_byte(addr, value) outb(value, addr)
 #define put_word(addr, value) outw(value, addr)
 
+pthread_mutex_t mutex_oeb;
+
 uint64_t get_48(uint32_t addr_low, uint32_t addr_mid, uint32_t addr_high)
 {
     uint16_t low = get_word(addr_low);
@@ -43,37 +45,58 @@ int oeb_init()
         fprintf(stderr, "Run with root permissions\n");
         return -1;
     }
+
+    pthread_mutex_init(&mutex_oeb, NULL);
+
     return 0;
+}
+
+void oeb_uninit()
+{
+    pthread_mutex_destroy(&mutex_oeb);
 }
 
 uint64_t oeb_get_clock()
 {
-    //TODO: needs mutex protection
+    pthread_mutex_lock(&mutex_oeb);
     put_byte(CLOCK_READ, 0); //latches the value of the clock for reading
-    return get_48(CLOCK_LOW, CLOCK_MID, CLOCK_HIGH);
+    uint64_t result = get_48(CLOCK_LOW, CLOCK_MID, CLOCK_HIGH);
+    pthread_mutex_unlock(&mutex_oeb);
+    return result;
 }
 
 void oeb_set_clock(uint64_t value)
 {
+    pthread_mutex_lock(&mutex_oeb);
     put_word(SYNC_LOW, value & 0xFFFF);
     put_word(SYNC_MID, (value >> 16) & 0xFFFF);
     put_word(SYNC_HIGH, (value >> 32) & 0xFFFF);
+    pthread_mutex_unlock(&mutex_oeb);
 }
 
 uint64_t oeb_get_irs()
 {
+    pthread_mutex_lock(&mutex_oeb);
     put_byte(IRS_LOW, 0); //latches something
-    return get_48(IRS_LOW, IRS_MID, IRS_HIGH);
+    uint64_t result = get_48(IRS_LOW, IRS_MID, IRS_HIGH);
+    pthread_mutex_unlock(&mutex_oeb);
+    return result;
 }
 
 uint64_t oeb_get_pyc()
 {
+    pthread_mutex_lock(&mutex_oeb);
     put_byte(PYC_LOW, 0); //latches something
-    return get_48(PYC_LOW, PYC_MID, PYC_HIGH);
+    uint64_t result = get_48(PYC_LOW, PYC_MID, PYC_HIGH);
+    pthread_mutex_unlock(&mutex_oeb);
+    return result;
 }
 
 uint64_t oeb_get_rc()
 {
+    pthread_mutex_lock(&mutex_oeb);
     put_byte(RC_LOW, 0); //latches something
-    return get_48(RC_LOW, RC_MID, RC_HIGH);
+    uint64_t result = get_48(RC_LOW, RC_MID, RC_HIGH);
+    pthread_mutex_unlock(&mutex_oeb);
+    return result;
 }
