@@ -172,6 +172,11 @@ bool getTemp(tCamera* Camera);
    ========================================================================================== */
 int camera_main()
 {
+    //create handler
+    struct sigaction act, oldact;
+    act.sa_handler = spawn_thread;
+    sigaction(10, &act, &oldact);
+
     // Initialize the API.
     if(!PvInitialize()) {
 
@@ -222,6 +227,8 @@ int camera_main()
 
     } else
         printf("\nFailed to initialize the API. Program terminating.\n\n");
+
+    sigaction(10, &oldact, NULL);
 
     return 0;
 }
@@ -463,13 +470,6 @@ void set_cadence()
 ==============================================================================================*/
 void set_timer(int x)
 {
-    //create handler
-    struct sigaction act;
-    struct sigaction oldact;
-    //act.sa_handler = CameraSnap2;
-    act.sa_handler = spawn_thread;
-    sigaction(10, &act, &oldact);
-
     //set the sigevent notification structure
     struct sigevent timersigevent; //create signal event
     memset(&timersigevent, 0, sizeof timersigevent); //initialize the struct with zeros
