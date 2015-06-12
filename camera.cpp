@@ -174,6 +174,7 @@ int camera_main()
 {
     //create handler
     struct sigaction act, oldact;
+    memset(&act, 0, sizeof(struct sigaction));
     act.sa_handler = spawn_thread;
     sigaction(10, &act, &oldact);
 

@@ -280,6 +280,7 @@ int main(int argc, char* argv[]) {
 	//create handler
 	struct sigaction act;
 	struct sigaction oldact;
+	memset(&act, 0, sizeof(struct sigaction));
 	//act.sa_handler = CameraSnap2;
 	act.sa_handler = spawn_thread;
 	sigaction(10, &act, &oldact);
