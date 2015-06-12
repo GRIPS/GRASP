@@ -105,7 +105,6 @@ sig_atomic_t volatile g_running = 1;
 
 //Function declarations
 void sig_handler(int signum);
-int usleep_force(uint64_t microseconds);
 
 void start_thread(void *(*start_routine) (void *), const Thread_data *tdata);
 void start_all_workers();
@@ -609,6 +608,8 @@ void *GRASPReceiverThread(void *threadargs)
         telReceiver.get_packet( packet );
 
         TelemetryPacket tp( packet, packet_length );
+
+        std::cout << tp << std::endl;
 
         switch(tp.getTmType())
         {

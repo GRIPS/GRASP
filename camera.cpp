@@ -1,4 +1,10 @@
+#define SAVE_1_OF_EVERY_N 10
+
+#define MAXNUMOFCAMERAS 2
+#define FRAMESCOUNT 5
+
 /* =============================================================================================
+
    Includes
    ========================================================================================== */
 #include <stdio.h>
@@ -42,7 +48,6 @@
 using namespace std; //the global namespace, CCfits used loacally in savefits
 
 //#define    _STDCALL
-#define    FRAMESCOUNT    5
 // _____________________________________________________________________________________________
 
 /* =============================================================================================
@@ -106,9 +111,7 @@ struct tCamera
     Global Variables
    ========================================================================================== */
 
-const int MAXNUMOFCAMERAS = 2;    // Specifies the maximum number of cameras used. Can be changed.
-unsigned long NUMOFCAMERAS = 2;        // Actual number of cameras detected.
-extern sig_atomic_t volatile g_running;
+unsigned long NUMOFCAMERAS = 0;        // Actual number of cameras detected.
 volatile bool CAMERASFOUND = false;
 int TICKSLCM;
 int a_cad;
@@ -119,8 +122,6 @@ tCamera CAMERAS[MAXNUMOFCAMERAS];
 
 #define PY_cam_ID 158434
 #define H_cam_ID 142974
-
-#define SAVE_1_OF_EVERY_N 10
 
 // __________________________________________________________________________________________end
 
@@ -206,6 +207,7 @@ int camera_main()
                         set_cadence();
                         while(g_running) {
                             //Wait for interrputs which generate triggers to snap and process images
+                            usleep_force(5000);
                         }
                     }
 
@@ -243,18 +245,18 @@ int camera_main()
 bool getTemp(tCamera* Camera)
 {
     tPvFloat32 T_MB = 0;
-    tPvFloat32 T_CCD = 0;
+    //tPvFloat32 T_CCD = 0;
 
     const char* whichfile;
     ofstream tempfile;
-    if(Camera->UID == PY_cam_ID){
+    if(Camera->UID == PY_cam_ID) {
         whichfile = "PY_temps.txt";
     } else {
         whichfile = "H_temps.txt";
     }
     tempfile.open(whichfile, ios::app);
 
-    if(PvAttrFloat32Get(Camera->Handle, "DeviceTemperatureMainboard", &T_MB) == 0){
+    if(PvAttrFloat32Get(Camera->Handle, "DeviceTemperatureMainboard", &T_MB) == 0) {
         //PvAttrFloat32Get(Camera->Handle, "DeviceTemperatureSensor", &T_CCD);
         //cout<<"T_MB = "<<T_MB<<endl;
         //cout<<"T_CCD = "<<T_CCD<<endl;
@@ -399,21 +401,21 @@ bool CameraSetup(tCamera* Camera, int cam)
 
     switch(Camera->UID) {
         case PY_cam_ID:
-            cout<<"Default PY settings: 5 im/s, 20000us, 0dB gain, saving\n";
+            cout<<"Default PY settings: 1 im/s, 20000us, 0dB gain, saving\n";
             Camera->ExposureLength = 20000;
             Camera->Gain = 0;
             break;
         case H_cam_ID:
-            cout<<"Default H settings: 5 im/s, 4000us, 0dB gain, saving\n";
+            cout<<"Default H settings: 1 im/s, 4000us, 0dB gain, saving\n";
             Camera->ExposureLength = 4000;
             Camera->Gain = 0;
             break;
         default:
-            cout<<"Default settings: 5 im/s, 20000us, 0dB gain, saving\n";
+            cout<<"Default settings: 1 im/s, 20000us, 0dB gain, saving\n";
             Camera->ExposureLength = 20000;
             Camera->Gain = 0;
     }
-    Camera->TicksPerSec = 5;
+    Camera->TicksPerSec = 1;
     Camera->WantToSave = true;
 
     //define the pixel format. see camera and driver attributes p.15
@@ -451,7 +453,7 @@ void set_cadence()
     bool tempBool = PAUSEPROGRAM;
     PAUSEPROGRAM = true;
 
-    for(unsigned int i=0;i<NUMOFCAMERAS;i++){
+    for(unsigned int i=0;i<NUMOFCAMERAS;i++) {
         a_cad += CAMERAS[i].TicksPerSec;
     }
 
@@ -480,41 +482,41 @@ void set_timer(int x)
 
     //create the timer
     timer_t timer1; //timer identifier
-    if(timer_create(CLOCK_REALTIME, &timersigevent, &timer1) == 0){
+    if(timer_create(CLOCK_REALTIME, &timersigevent, &timer1) == 0) {
         printf("timer created correctly\n");
-    }else{
+    } else {
         printf("timer not created \n");
     }
 
     //sleep to allow dd to register the handler before arming timer
-    struct timespec tim, tim2;
-    tim.tv_sec=0;
-    tim.tv_nsec=100;
-    nanosleep(&tim, &tim2);
+    //struct timespec tim, tim2;
+    //tim.tv_sec=0;
+    //tim.tv_nsec=100;
+    //nanosleep(&tim, &tim2);
 
-    if(x == 0){
+    if(x == 0) {
         //Set timer values
         struct itimerspec cadence;
         memset(&cadence, 0, sizeof cadence);
-        if (a_cad != 1){
+        if (a_cad != 1) {
             cadence.it_value.tv_sec= 0;         //value is time from set until first tick
             cadence.it_value.tv_nsec =  1000000000/ a_cad;
-             cadence.it_interval.tv_sec=0;         //interval resets the timer to this value
+            cadence.it_interval.tv_sec=0;         //interval resets the timer to this value
             cadence.it_interval.tv_nsec= 1000000000/ a_cad;
-        } else{
+        } else {
             cadence.it_value.tv_sec= 1;
             cadence.it_value.tv_nsec =  0;
-             cadence.it_interval.tv_sec= 1;
+            cadence.it_interval.tv_sec= 1;
             cadence.it_interval.tv_nsec= 0;
         }
 
         //arm the timer
-        if(timer_settime(timer1, 0, &cadence, NULL) == 0){
+        if(timer_settime(timer1, 0, &cadence, NULL) == 0) {
             printf("timer armed correctly\n");
-        }else{
+        } else {
             printf("timer not armed.\n");
         }
-    }else if(x == 1){
+    } else if(x == 1) {
         //disable the timer
         struct itimerspec pause;
         memset(&pause, 0, sizeof pause);
@@ -570,7 +572,7 @@ bool CameraStart(tCamera* Camera)
                 if(!PvAttrEnumSet(Camera->Handle, "AcquisitionMode", "Continuous")
                    && !PvAttrEnumSet(Camera->Handle, "FrameStartTriggerMode", "Software")) {
                     //set packet size
-                    if(PvAttrUint32Set(Camera->Handle, "PacketSize", 8228)){ //
+                    if(PvAttrUint32Set(Camera->Handle, "PacketSize", 8228)) { //
                         // Begin acquisition.
                         if(PvCommandRun(Camera->Handle, "AcquisitionStart")) {
                             // If that fails, reset the camera to non-capture mode.
@@ -657,13 +659,13 @@ int whichcamera()
         int diff = CAMERAS[0].TicksPerSec - CAMERAS[1].TicksPerSec;
         //alternate btwn the two cameras for even/odd at first and all the rest get tacked on at the end for now
         if( diff == 0 || abs(diff) ==1) {
-                        i=evenodd();
+            i=evenodd();
         } else {
             int gc = CAMERAS[0].TicksPerSec > CAMERAS[1].TicksPerSec ? 0 : 1;
             if(TICKCOUNT < a_cad - abs(diff)) {
-                    i=evenodd();
+                i=evenodd();
             } else {
-                    i = gc;
+                i = gc;
             }
         }
     }
@@ -688,7 +690,7 @@ void spawn_thread(int x)
         pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED); //create thread in detached state
         thread_err = pthread_create(&CAMERAS[i].thread[CAMERAS[i].idx], &attr, snap_thread, (void *)&i);
         pthread_attr_destroy(&attr);
-        if(thread_err){
+        if(thread_err) {
             cout<<"didn't create thread for camera "<<CAMERAS[i].UID<<" frame "<<CAMERAS[i].idx<<endl;
             cout<<"Error: "<<thread_err<<endl;
         }
@@ -723,7 +725,7 @@ void *snap_thread(void *cam)
 
         //initalize variables & housekeeping
         tPvErr errCode;
-        int count = 0;
+        //int count = 0;
         prog_c con;
         init_prog_c(con);
 
@@ -751,7 +753,7 @@ void *snap_thread(void *cam)
                 timestamp(i);
                 CAMERAS[i].snapcount++;
                 CAMERAS[i].waitFlag= true;
-                if(PvCommandRun(CAMERAS[i].Handle, "FrameStartTriggerSoftware") != ePvErrSuccess){
+                if(PvCommandRun(CAMERAS[i].Handle, "FrameStartTriggerSoftware") != ePvErrSuccess) {
                     cout<<"Trigger Software Error: ";
                     PrintError(errCode);
                 }
@@ -759,14 +761,14 @@ void *snap_thread(void *cam)
                     tester(1,t,0);
                 errCode = PvCaptureWaitForFrameDone(CAMERAS[i].Handle,&(CAMERAS[i].Frames[CAMERAS[i].BufferIndex]),con.timeout1);
                 handle_wait(i, errCode, con.timeout2); //checks and updates waitflag and errCode
-                if(con.c_timer){
+                if(con.c_timer) {
                     cout<<CAMERAS[i].UID<<" ";
                     tester(2,t,0);
                 }
 
                 //Process: if done waiting, no timeout, successful frame & non-zero bitdepth
                 //cout<<"image size: "<<CAMERAS[i].Frames[CAMERAS[i].BufferIndex].ImageSize<<endl;
-                if(CAMERAS[i].waitFlag== false && errCode == ePvErrSuccess){
+                if(CAMERAS[i].waitFlag== false && errCode == ePvErrSuccess) {
                     if( CAMERAS[i].Frames[CAMERAS[i].BufferIndex].Status == ePvErrSuccess && CAMERAS[i].Frames[CAMERAS[i].BufferIndex].BitDepth != 0) {
                         if(con.c_timer)
                             tester(1,t,0);
@@ -844,7 +846,7 @@ void handle_timeout(int i)
     //for every nth timeout restart imagecapture stream - not sure if this actually makes a difference
     CAMERAS[i].TimeoutCount++;
 
-    if (CAMERAS[i].TimeoutCount % 10 == 0 ){ //make this a parameter on table!!!
+    if (CAMERAS[i].TimeoutCount % 10 == 0 ) { //make this a parameter on table!!!
         cout<<"10th timeout. Restart Image capture stream\n";
         RestartImCap(i);
     } else {
@@ -868,7 +870,7 @@ void Process(int i, int CurrBuffer)
     if(CAMERAS[i].UID == PY_cam_ID) {
         //cout<<"ProcessPY\n";
         ProcessPY(i, imarr);
-    } else if(CAMERAS[i].UID == H_cam_ID){
+    } else if(CAMERAS[i].UID == H_cam_ID) {
         //cout<<"ProcessH\n";
         ProcessH(i, imarr);
     } else {
@@ -894,11 +896,11 @@ void ProcessPY(int i, valarray<unsigned char> imarr)
     timeval t;
 
     //2. analyze live or test image?
-    if(con.live){
+    if(con.live) {
         if(con.c_timer)
             tester(1,t,0);
         analyzePY(im, val, imarr);
-        if(con.c_timer){
+        if(con.c_timer) {
             cout<<"Analysis ";
             tester(2,t,0);
         }
@@ -912,7 +914,7 @@ void ProcessPY(int i, valarray<unsigned char> imarr)
         if(con.c_timer)
             tester(1,t,0);
         analyzePY(im, val, imarr);
-        if(con.c_timer){
+        if(con.c_timer) {
             cout<<"Test Im Analysis ";
             tester(2,t,0);
         }
@@ -921,7 +923,7 @@ void ProcessPY(int i, valarray<unsigned char> imarr)
     }
 
     //drawline at centers? This will be saved in the image below
-    if(val.drawline){
+    if(val.drawline) {
         drawline(imarr, val, im);
     }
 
@@ -933,12 +935,12 @@ void ProcessPY(int i, valarray<unsigned char> imarr)
         //filename << "images/" << CAMERAS[i].UID << "_" << CAMERAS[i].BufferIndex<<".fits"; //circular filename buffer
         if(con.c_timer)
             tester(1,t,0);
-                if((CAMERAS[i].savecount % SAVE_1_OF_EVERY_N) == 0) saveim(i, imarr, filename.str().c_str(), im, val);
+        if((CAMERAS[i].savecount % SAVE_1_OF_EVERY_N) == 0) saveim(i, imarr, filename.str().c_str(), im, val);
         CAMERAS[i].savecount++;
-        if(con.c_timer){
+        if(con.c_timer) {
             cout<<"Saving ";
             tester(2,t,0);
-            }
+        }
         filename.seekp(0);
      }
 
@@ -959,16 +961,16 @@ void ProcessH(int i, valarray<unsigned char> imarr)
     init_prog_c(con);
     params_H val;
     init_params_H(val, (int)CAMERAS[i].FrameWidth, (int)(CAMERAS[i].FrameHeight*CAMERAS[i].FrameWidth));
-     info_H im;
+    info_H im;
     init_H(im);
     timeval t;
 
     //2. analyze live or test image?
-    if(con.live){
+    if(con.live) {
         if(con.c_timer)
             tester(1,t,0);
         //analyzeH(im, val, imarr);
-        if(con.c_timer){
+        if(con.c_timer) {
             cout<<"Analysis ";
             tester(2,t,0);
         }
@@ -980,7 +982,7 @@ void ProcessH(int i, valarray<unsigned char> imarr)
         if(con.c_timer)
             tester(1,t,0);
         analyzeH(im, val, imarr);
-        if(con.c_timer){
+        if(con.c_timer) {
             cout<<"Analysis ";
             tester(2,t,0);
         }
@@ -996,12 +998,12 @@ void ProcessH(int i, valarray<unsigned char> imarr)
                                             <<"_"<< CAMERAS[i].savecount<<".fits";
         //filename << "images/" << CAMERAS[i].UID << "_" << CAMERAS[i].BufferIndex<<".fits";
         if(con.c_timer)
-                tester(1,t,0);
+            tester(1,t,0);
         if((CAMERAS[i].savecount % SAVE_1_OF_EVERY_N) == 0) saveim_H(i, imarr, filename.str().c_str(), im, val); //set-up as bool, return true if ok, error msg if not
         CAMERAS[i].savecount++;
-        if(con.c_timer){
-                cout<<"Saving ";
-                tester(2,t,0);
+        if(con.c_timer) {
+            cout<<"Saving ";
+            tester(2,t,0);
         }
         filename.seekp(0);
      }
@@ -1033,9 +1035,9 @@ bool saveim(int i, valarray<unsigned char> imarr, const char* filename, info im,
         //create new fits file
         try {
             pFits.reset( new FITS(filename , BYTE_IMG , 0 , 0 ) ); //reset=deallocate object and reset its value. change to BYTE_IMG?
-        } catch (FITS::CantCreate){
-             std::cout<<"Couldn't create FITS file. The file might already exist. \n";
-              return false;
+        } catch (FITS::CantCreate) {
+            std::cout<<"Couldn't create FITS file. The file might already exist. \n";
+            return false;
         }
 
 
@@ -1054,7 +1056,7 @@ bool saveim(int i, valarray<unsigned char> imarr, const char* filename, info im,
         //pFits->pHDU().addKey("thresh", im.thresh, "Thresholds");
         //pFits->pHDU().addKey("Time Stamp",CAMERAS[i].TimeStamps[j], "prog timestamp"); //gives error
 
-    } catch (FitsException&){
+    } catch (FitsException&) {
      // will catch all exceptions thrown by CCfits, including errors
      // found by cfitsio (status != 0).
         std::cerr << " Fits Exception Thrown.  \n";
@@ -1068,13 +1070,13 @@ bool saveim(int i, valarray<unsigned char> imarr, const char* filename, info im,
     extAx.push_back(val.nel/val.width);
 
     string newName ("Raw Image");
-    long  fpixel(1);
+    long fpixel(1);
 
     try {
         imageExt = pFits->addImage(newName,BYTE_IMG,extAx, 1);
         imageExt->write(fpixel,val.nel,imarr);    //write extension
         //std::cout << pFits->pHDU() << std::endl;
-    } catch (FitsException){
+    } catch (FitsException) {
         std::cout<<"Couldn't write image to extension\n";
     }
 
@@ -1105,7 +1107,7 @@ bool saveim_H(int i, valarray<unsigned char> imarr, const char* filename, info_H
         //create new fits file
         try {
                pFits.reset( new FITS(filename , BYTE_IMG , 0 , 0 ) ); //reset=deallocate object and reset its value. change to BYTE_IMG?
-        } catch (FITS::CantCreate){
+        } catch (FITS::CantCreate) {
               std::cout<<"Couldn't create FITS file. The file might already exist. \n";
               return false;
         }
@@ -1118,7 +1120,7 @@ bool saveim_H(int i, valarray<unsigned char> imarr, const char* filename, info_H
         pFits->pHDU().addKey("Exposure",(long)CAMERAS[i].ExposureLength, "for cameanalyzera");
         pFits->pHDU().addKey("filename", filename, "Name of the file");
 
-    } catch (FitsException&){
+    } catch (FitsException&) {
         std::cerr << " Fits Exception Thrown.  \n";
     }
 
@@ -1129,14 +1131,14 @@ bool saveim_H(int i, valarray<unsigned char> imarr, const char* filename, info_H
     extAx.push_back(val.width);
     extAx.push_back(val.nel/val.width);
     string newName ("Raw Image");
-    long  fpixel(1);
+    long fpixel(1);
 
 
     try {
         imageExt = pFits->addImage(newName,BYTE_IMG,extAx, 1);
         imageExt->write(fpixel,val.nel,imarr);    //write extension
         //std::cout << pFits->pHDU() << std::endl;
-    } catch (FitsException){
+    } catch (FitsException) {
         std::cout<<"Couldn't write image to extension\n";
     }
 
@@ -1163,7 +1165,7 @@ void tester(int x, timeval& t1, int i)
     float us;
 
     //tests
-    switch (x){
+    switch (x) {
         case 0 : {
             cout<<"SNAP "<< CAMERAS[i].snapcount <<" : "<<filename << highrestime.tv_usec<<"\n";
             break;
@@ -1347,16 +1349,16 @@ void CameraUnsetup(tCamera* Camera)
 void RestartAcq(int j)
 {
     //pause program
-    PAUSEPROGRAM= true;
+    PAUSEPROGRAM = true;
 
-    if(PvCommandRun(CAMERAS[j].Handle, "AcquisitionAbort")==ePvErrSuccess){
+    if(PvCommandRun(CAMERAS[j].Handle, "AcquisitionAbort") == ePvErrSuccess) {
         cout<<"Acquisition Stopped.\n";
     } else {
         cout<<"Couldn't stop acquisition.\n";
     }
-    if(PvCaptureQueueClear(CAMERAS[j].Handle)==ePvErrSuccess)
+    if(PvCaptureQueueClear(CAMERAS[j].Handle) == ePvErrSuccess)
         printf("Frame buffer queue cleared. \n");
-    if(PvCommandRun(CAMERAS[j].Handle, "AcquisitionStart")==ePvErrSuccess)
+    if(PvCommandRun(CAMERAS[j].Handle, "AcquisitionStart") == ePvErrSuccess)
         cout<<"Acquisition Started. \n\n";
 
     //restart program
@@ -1373,20 +1375,20 @@ void RestartImCap(int j)
     //pause program
     PAUSEPROGRAM = true;
 
-    if(PvCaptureQueueClear(CAMERAS[j].Handle)==ePvErrSuccess)
+    if(PvCaptureQueueClear(CAMERAS[j].Handle) == ePvErrSuccess)
         printf("Frame buffer queue cleared. \n");
-    if(PvCommandRun(CAMERAS[j].Handle, "AcquisitionAbort")==ePvErrSuccess){
+    if(PvCommandRun(CAMERAS[j].Handle, "AcquisitionAbort") == ePvErrSuccess) {
         cout<<"Acquisition Stopped.\n";
     }else{
         cout<<"Couldn't stop Acquisition.\n";
     }
     //if(PvCaptureQueueClear(CAMERAS[j].Handle)==ePvErrSuccess)
     //    printf("Frame buffer queue cleared. \n");
-    if(PvCaptureEnd(CAMERAS[j].Handle)==ePvErrSuccess)
+    if(PvCaptureEnd(CAMERAS[j].Handle) == ePvErrSuccess)
         printf("Image capture stream terminated. \n");
-    if(PvCaptureStart(CAMERAS[j].Handle)==ePvErrSuccess)
+    if(PvCaptureStart(CAMERAS[j].Handle) == ePvErrSuccess)
         printf("Image capture stream restarted. \n");
-    if(PvCommandRun(CAMERAS[j].Handle, "AcquisitionStart")==ePvErrSuccess)
+    if(PvCommandRun(CAMERAS[j].Handle, "AcquisitionStart") == ePvErrSuccess)
         cout<<"Acquisition Started. \n\n";
 
     //restart Program
