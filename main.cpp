@@ -609,7 +609,7 @@ void *GRASPReceiverThread(void *threadargs)
 
         TelemetryPacket tp( packet, packet_length );
 
-        std::cout << tp << std::endl;
+        //std::cout << tp << std::endl;
 
         switch(tp.getTmType())
         {
