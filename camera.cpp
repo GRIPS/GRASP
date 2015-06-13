@@ -3,6 +3,9 @@
 #define MAXNUMOFCAMERAS 2
 #define FRAMESCOUNT 5
 
+#define PY_cam_ID 158434
+#define H_cam_ID 142974
+
 /* =============================================================================================
 
    Includes
@@ -62,7 +65,6 @@ struct tCamera
     unsigned long    UID;
     tPvHandle        Handle;
     tPvFrame        Frames[FRAMESCOUNT];
-    unsigned long IP;            //the IP addy of the camera
     //valarray<unsigned char> imarr[FRAMESCOUNT]; //each valarray is sized 0, resized in setup
     //auto_ptr<CCfits::FITS> pFits[FRAMESCOUNT]; //vector of pointers
     char            TimeStamps[FRAMESCOUNT][23];
@@ -110,19 +112,11 @@ struct tCamera
 /* =============================================================================================
     Global Variables
    ========================================================================================== */
-
 unsigned long NUMOFCAMERAS = 0;        // Actual number of cameras detected.
-volatile bool CAMERASFOUND = false;
-int TICKSLCM;
 int a_cad;
-int TICKCOUNT = 0;
+volatile int TICKCOUNT = 0;
 bool PAUSEPROGRAM = false;
-tCamera GCamera;
 tCamera CAMERAS[MAXNUMOFCAMERAS];
-
-#define PY_cam_ID 158434
-#define H_cam_ID 142974
-
 // __________________________________________________________________________________________end
 
 
@@ -131,39 +125,45 @@ tCamera CAMERAS[MAXNUMOFCAMERAS];
    ========================================================================================== */
 void PrintError(int errCode);
 void CameraEventCB(void* Context, tPvInterface Interface, tPvLinkEvent Event,
-                            unsigned long UniqueId);
-int LCM(int x, int y);
-bool WaitForCamera();
+                   unsigned long UniqueId);
+
 bool CameraGrab();
 bool CameraSetup(tCamera *Camera);
-void TicksLCM();
 bool CameraStart(tCamera *Camera);
-void CameraStop(tCamera *Camera);
+bool getTemp(tCamera *Camera);
+void CameraUnsetup(tCamera *Camera);
+
+void init_cam_struct(tCamera *Camera);
+bool is_pyc(tCamera *Camera);
+void timestamp(tCamera *Camera);
+
+void set_cadence();
+void set_timer(int x);
+int next_camera();
+
+void tester(int x, timeval& t1, int i);
+
 void spawn_thread(int x);
 void *snap_thread(void *cam);
 void handle_wait(tCamera *Camera, tPvErr &errCode, int timeout2);
 void handle_timeout(tCamera *Camera);
+void RestartImCap(tCamera *Camera);
+void queueErrorHandling(tCamera *Camera);
+
 void Process(tCamera *Camera);
-void CameraUnsetup(tCamera *Camera);
-void DisplayParameters();
 void ProcessPY(tCamera *Camera, valarray<unsigned char> imarr);
 void ProcessH(tCamera *Camera, valarray<unsigned char> imarr);
-void tester(int x, timeval& t1, int i);
-void FrameStats(tCamera *Camera);
-void RestartImCap(tCamera *Camera);
-void RestartAcq(tCamera *Camera);
-void timer(int x);
-void queueErrorHandling(tCamera *Camera);
+
 bool saveim(tCamera *Camera, valarray<unsigned char> imarr, const char* filename, info im, params val);
 bool saveim_H(tCamera *Camera, valarray<unsigned char> imarr, const char* filename, info_H im, params_H val);
+
 int readfits(const char* filename, valarray<unsigned char>& contents, int &nelements, int &width);
-void set_timer(int x);
-void set_cadence();
-void timestamp(tCamera *Camera);
-int whichcamera();
-void init_cam_struct(tCamera *Camera);
-bool getTemp(tCamera *Camera);
-bool is_pyc(tCamera *Camera);
+
+//not currently used
+void CameraStop(tCamera *Camera);
+void RestartAcq(tCamera *Camera);
+void DisplayParameters();
+void FrameStats(tCamera *Camera);
 // __________________________________________________________________________________________end
 
 
@@ -203,7 +203,6 @@ int camera_main()
                     if(!startSuccess) {
                         printf("Failed to start streaming from cameras.\n");
                     } else {
-                        //TicksLCM(); //must have ticks after the signal handler is setup
                         set_cadence();
                         while(g_running) {
                             //Wait for interrputs which generate triggers to snap and process images
@@ -329,25 +328,21 @@ bool CameraGrab()
     //try 1st camera
     memset(&CAMERAS[i], 0, sizeof(tCamera));
     if(!PvCameraOpenByAddr(inet_addr(IP1), ePvAccessMaster, &(CAMERAS[i].Handle))) {
-                CAMERAS[i].UID = PY_cam_ID;
-                CAMERAS[i].IP =  inet_addr(IP1);
-                i+=1;
+        CAMERAS[i].UID = PY_cam_ID;
+        i++;
     } else {
-                cout<<"couldn't open PY camera\n";
+        cout<<"couldn't open PY camera\n";
     }
     //try 2nd camera
     memset(&CAMERAS[i], 0, sizeof(tCamera));
     if(!PvCameraOpenByAddr(inet_addr(IP2), ePvAccessMaster, &(CAMERAS[i].Handle))) {
-                CAMERAS[i].UID = H_cam_ID;
-                CAMERAS[i].IP =  inet_addr(IP2);
-                i+=1;
+        CAMERAS[i].UID = H_cam_ID;
+        i++;
     } else {
-                cout<<"couldn't open H camera\n";
+        cout<<"couldn't open H camera\n";
     }
 
     NUMOFCAMERAS = i;
-    if(i > 0)
-        CAMERASFOUND = true;
 
     //set-up camera flags and indexes
     for(unsigned int i = 0; i < NUMOFCAMERAS; i++) {
@@ -463,7 +458,7 @@ void set_cadence()
 
     //print a_cad
     cout<<"This is the a_cad: "<<a_cad<<"\n";
-    set_timer(0);     //create and arm the timer which generates an interrupts at a cadence of TICKSLCM
+    set_timer(0);     //create and arm the interrupt timer
 
     PAUSEPROGRAM = tempBool;
 }
@@ -632,11 +627,11 @@ void timestamp(tCamera *Camera)
 
 
 /*=============================================================================================
-  Determines which camera to snap
+  Determines which camera to snap next
   Currently assumes two cameras and alternates between them until one camera is "done"
   Returns 0 or 1
   ========================================================================================== */
-int whichcamera()
+int next_camera()
 {
     if(TICKCOUNT < 2 * MIN(CAMERAS[0].TicksPerSec, CAMERAS[1].TicksPerSec)) {
         return TICKCOUNT % 2;
@@ -653,7 +648,7 @@ void spawn_thread(int x)
 {
     if(!PAUSEPROGRAM && g_running) {
         //which camera snaps?
-        tCamera *Camera = &CAMERAS[whichcamera()];
+        tCamera *Camera = &CAMERAS[next_camera()];
 
         //spawn thread based on camera and idx
         int thread_err;
