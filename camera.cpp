@@ -31,8 +31,6 @@
 #include "a_PY.h"
 #include "a_H.h"
 #include "control.h"
-#include "network/Telemetry.hpp"
-#include "network/UDPSender.hpp"
 #include "main.hpp"
 #include "oeb.h"
 #include "Image.hpp"
@@ -269,11 +267,11 @@ bool getTemp(tCamera *Camera)
         //cout<<"T_CCD = "<<T_CCD<<endl;
         tempfile << T_MB <<endl;
 
-        //Send temperatures on a loopback to be received by main process
-        TelemetrySender telSender("127.0.0.1", 44444);
-        TelemetryPacket tp(0x4F, is_pyc(Camera) ? 0 : 1, 0, 0);
-        tp << (float)T_MB;
-        telSender.send(&tp);
+        if(is_pyc(Camera)) {
+            temp_py = T_MB;
+        } else {
+            temp_roll = T_MB;
+        }
 
         return true;
     } else {

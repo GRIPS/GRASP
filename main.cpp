@@ -124,7 +124,6 @@ void queue_settings_tmpacket();
 
 void *IRSensorThread(void *threadargs);
 
-void *GRASPReceiverThread(void *threadargs);
 void *CameraMainThread(void *threadargs);
 
 template <class T>
@@ -613,47 +612,6 @@ void *IRSensorThread(void *threadargs)
     pthread_exit( NULL );
 }
 
-void *GRASPReceiverThread(void *threadargs)
-{
-    long tid = (long)((struct Thread_data *)threadargs)->thread_id;
-    printf("GRASPReceiver thread #%ld!\n", tid);
-
-    TelemetryReceiver telReceiver(44444);
-    telReceiver.init_connection();
-
-    while(!stop_message[tid])
-    {
-        unsigned int packet_length;
-
-        usleep_force(USLEEP_UDP_LISTEN);
-        packet_length = telReceiver.listen( );
-        uint8_t *packet;
-        packet = new uint8_t[packet_length];
-        telReceiver.get_packet( packet );
-
-        TelemetryPacket tp( packet, packet_length );
-
-        //std::cout << tp << std::endl;
-
-        switch(tp.getTmType())
-        {
-            case 0: //Pitch-yaw camera
-                tp >> temp_py;
-                break;
-            case 1: //Roll camera
-                tp >> temp_roll;
-                break;
-            default:
-                break;
-        }
-    }
-
-    printf("GRASPReceiver thread #%ld exiting\n", tid);
-    telReceiver.close_connection();
-    started[tid] = false;
-    pthread_exit( NULL );
-}
-
 void *CameraMainThread(void *threadargs)
 {
     long tid = (long)((struct Thread_data *)threadargs)->thread_id;
@@ -742,7 +700,6 @@ void start_all_workers()
     start_thread(TelemetryScienceThread, NULL);
     start_thread(TelemetrySenderThread, NULL);
     start_thread(IRSensorThread, NULL);
-    start_thread(GRASPReceiverThread, NULL);
     start_thread(CameraMainThread, NULL);
 }
 
