@@ -199,7 +199,7 @@ int camera_main()
                         printf("Failed to start streaming from cameras.\n");
                     } else {
                         set_cadence();
-                        while(g_running) {
+                        while(g_running_camera_main) {
                             //Wait for interrputs which generate triggers to snap and process images
                             usleep_force(5000);
                         }
@@ -597,7 +597,7 @@ int next_camera()
   ========================================================================================== */
 void spawn_thread(int x)
 {
-    if(!PAUSEPROGRAM && g_running) {
+    if(!PAUSEPROGRAM && g_running_camera_main) {
         //which camera snaps?
         tCamera *Camera = &CAMERAS[next_camera()];
 
@@ -636,83 +636,80 @@ void *snap_thread(void *cam)
 {
     tCamera *Camera = (tCamera *)cam;
 
-    if(!PAUSEPROGRAM && g_running) {
-        //initalize variables & housekeeping
-        tPvErr errCode;
-        //int count = 0;
-        prog_c con;
-        init_prog_c(con);
+    //initalize variables & housekeeping
+    tPvErr errCode;
+    //int count = 0;
+    prog_c con;
+    init_prog_c(con);
 
-        //housekeeping
-        getTemp(Camera);
+    //housekeeping
+    getTemp(Camera);
 
-        //start snap only if we're done waiting for another frame to return (but doesn't protect frame buffer)
-        if(Camera->Handle != NULL && !Camera->PauseCapture && !Camera->waitFlag) {
-            //snap on time? output to screen
-            timeval t;
-            //tester(0, t, i);
+    //start snap only if we're done waiting for another frame to return (but doesn't protect frame buffer)
+    if(Camera->Handle != NULL && !Camera->PauseCapture && !Camera->waitFlag) {
+        //snap on time? output to screen
+        timeval t;
+        //tester(0, t, i);
 
-            //requeue a frame & snap (if successful requeue) - then process (if no timeout & done waiting)
-            Camera->queueStatus = PvCaptureQueueFrame(Camera->Handle,&(Camera->Frames[Camera->BufferIndex]),NULL);
-            if(Camera->queueStatus == ePvErrSuccess) {
-                //update flags
-                Camera->requeueCallFlag = false;
-                Camera->NewFlags[Camera->BufferIndex] = true;
-                Camera->frameandqueueFlag = false;
+        //requeue a frame & snap (if successful requeue) - then process (if no timeout & done waiting)
+        Camera->queueStatus = PvCaptureQueueFrame(Camera->Handle,&(Camera->Frames[Camera->BufferIndex]),NULL);
+        if(Camera->queueStatus == ePvErrSuccess) {
+            //update flags
+            Camera->requeueCallFlag = false;
+            Camera->NewFlags[Camera->BufferIndex] = true;
+            Camera->frameandqueueFlag = false;
 
-                //trigger, wait and queue processing if successful
-                timestamp(Camera);
-                Camera->snapcount++;
-                Camera->waitFlag= true;
-                if(PvCommandRun(Camera->Handle, "FrameStartTriggerSoftware") != ePvErrSuccess) {
-                    cout<<"Trigger Software Error: ";
-                    PrintError(errCode);
-                }
-                if(con.c_timer)
-                    tester(1,t,0);
-                errCode = PvCaptureWaitForFrameDone(Camera->Handle,&(Camera->Frames[Camera->BufferIndex]),con.timeout1);
-                handle_wait(Camera, errCode, con.timeout2); //checks and updates waitflag and errCode
-                if(con.c_timer) {
-                    cout<<Camera->UID<<" ";
-                    tester(2,t,0);
-                }
+            //trigger, wait and queue processing if successful
+            timestamp(Camera);
+            Camera->snapcount++;
+            Camera->waitFlag= true;
+            if(PvCommandRun(Camera->Handle, "FrameStartTriggerSoftware") != ePvErrSuccess) {
+                cout<<"Trigger Software Error: ";
+                PrintError(errCode);
+            }
+            if(con.c_timer)
+                tester(1,t,0);
+            errCode = PvCaptureWaitForFrameDone(Camera->Handle,&(Camera->Frames[Camera->BufferIndex]),con.timeout1);
+            handle_wait(Camera, errCode, con.timeout2); //checks and updates waitflag and errCode
+            if(con.c_timer) {
+                cout<<Camera->UID<<" ";
+                tester(2,t,0);
+            }
 
-                //Process: if done waiting, no timeout, successful frame & non-zero bitdepth
-                //cout<<"image size: "<<Camera->Frames[Camera->BufferIndex].ImageSize<<endl;
-                if(Camera->waitFlag== false && errCode == ePvErrSuccess) {
-                    if( Camera->Frames[Camera->BufferIndex].Status == ePvErrSuccess && Camera->Frames[Camera->BufferIndex].BitDepth != 0) {
-                        if(con.c_timer)
-                            tester(1,t,0);
-                        Process(Camera);
-                        if(con.c_timer) {
-                            cout<<"Processing "; //timer
-                            tester(2,t,0);
-                            cout<<"\n\n";
-                        }
-                    } else {
-                        cout<<"CurrBuffer: "<<Camera->BufferIndex<<endl;
-                        if(Camera->Frames[Camera->BufferIndex].Status != ePvErrSuccess) {
-                            cout<<"unsuccessful frame\n\n";
-                            ++Camera->unsuccount;
-                        }
-                        if(Camera->Frames[Camera->BufferIndex].BitDepth ==0) {
-                            cout<<"BitDepth: "<<Camera->Frames[Camera->BufferIndex].BitDepth<<"\n\n";
-                            ++Camera->zerobitcount;
-                        }
+            //Process: if done waiting, no timeout, successful frame & non-zero bitdepth
+            //cout<<"image size: "<<Camera->Frames[Camera->BufferIndex].ImageSize<<endl;
+            if(Camera->waitFlag== false && errCode == ePvErrSuccess) {
+                if( Camera->Frames[Camera->BufferIndex].Status == ePvErrSuccess && Camera->Frames[Camera->BufferIndex].BitDepth != 0) {
+                    if(con.c_timer)
+                        tester(1,t,0);
+                    Process(Camera);
+                    if(con.c_timer) {
+                        cout<<"Processing "; //timer
+                        tester(2,t,0);
+                        cout<<"\n\n";
                     }
                 } else {
-                    cout<<"wait flag or timeout error\n\n";
+                    cout<<"CurrBuffer: "<<Camera->BufferIndex<<endl;
+                    if(Camera->Frames[Camera->BufferIndex].Status != ePvErrSuccess) {
+                        cout<<"unsuccessful frame\n\n";
+                        ++Camera->unsuccount;
+                    }
+                    if(Camera->Frames[Camera->BufferIndex].BitDepth ==0) {
+                        cout<<"BitDepth: "<<Camera->Frames[Camera->BufferIndex].BitDepth<<"\n\n";
+                        ++Camera->zerobitcount;
+                    }
                 }
             } else {
-                cout<<"PvCaptureQueueFrame err\n";
-                queueErrorHandling(Camera);
-            }//requeueframe
-        } else { //handle&&pausecap&&flag
-            cout<<Camera->UID<<" handle, pausecap or flag error\n";
-        }
-    } else {//!pause&&
-        cout<<Camera->UID<<" pause or terminate error\n";
+                cout<<"wait flag or timeout error\n\n";
+            }
+        } else {
+            cout<<"PvCaptureQueueFrame err\n";
+            queueErrorHandling(Camera);
+        }//requeueframe
+    } else { //handle&&pausecap&&flag
+        cout<<Camera->UID<<" handle, pausecap or flag error\n";
     }
+
     //probably don't need this b/c its explicity created detached... test later
     //pthread_detach(pthread_self());
     pthread_exit(NULL);

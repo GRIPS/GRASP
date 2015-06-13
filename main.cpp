@@ -102,6 +102,7 @@ struct Thread_data{
 struct Thread_data thread_data[MAX_THREADS];
 
 sig_atomic_t volatile g_running = 1;
+sig_atomic_t volatile g_running_camera_main = 1;
 
 //Function declarations
 void sig_handler(int signum);
@@ -136,6 +137,7 @@ void sig_handler(int signum)
         if (signum == SIGINT) std::cerr << "Keyboard interrupt received\n";
         if (signum == SIGTERM) std::cerr << "Termination signal received\n";
         g_running = 0;
+        g_running_camera_main = 0;
     }
 }
 
@@ -169,6 +171,7 @@ void kill_all_workers()
             stop_message[i] = true;
         }
     }
+    g_running_camera_main = 0;
     usleep_force(USLEEP_KILL);
     for(int i = 0; i < MAX_THREADS; i++ ){
         if ((i != tid_listen) && started[i]) {
@@ -462,13 +465,6 @@ void queue_settings_tmpacket()
 
 void *CommandHandlerThread(void *threadargs)
 {
-    // command error code definition
-    // error_code   description
-    // 0x0000       command implemented successfully
-    // 0x0001       command not implemented
-    // 0xEEEE       unknown command
-    // 0xFFFF       unknown system ID
-    //
     long tid = (long)((struct Thread_data *)threadargs)->thread_id;
     struct Thread_data *my_data;
     uint8_t error_code = 0xFF; //command not implemented
@@ -511,13 +507,13 @@ void *CommandHandlerThread(void *threadargs)
                     break;
                 case 0xE0: //Load parameter table
                     break;
-                case 0xF0: //Restart worker threads, handle elsewhere!
+                case 0xF0: //Restart worker threads, handled earlier
                     break;
-                case 0xF1: //Restart all threads, handle elsewhere!
+                case 0xF1: //Restart all threads, handled earlier
                     break;
-                case 0xF2: //Restart runtime, handle elsewhere!
+                case 0xF2: //Restart runtime, handled earlier
                     break;
-                case 0xFF: //Graceful computer shutdown, handle elsewhere!
+                case 0xFF: //Graceful computer shutdown, handled earlier
                     break;
                 default:
                     std::cerr << "Unknown command\n";
@@ -686,7 +682,7 @@ void cmd_process_command(CommandPacket &cp)
             g_running = 0;
             break;
         case 0xFF:
-            std::cerr << "Graceful shutdown not yet implemented!\n";
+            std::cerr << "Graceful computer shutdown not yet implemented!\n";
             break;
         default:
             start_thread(CommandHandlerThread, &tdata);
@@ -700,6 +696,8 @@ void start_all_workers()
     start_thread(TelemetryScienceThread, NULL);
     start_thread(TelemetrySenderThread, NULL);
     start_thread(IRSensorThread, NULL);
+
+    g_running_camera_main = 1;
     start_thread(CameraMainThread, NULL);
 }
 
