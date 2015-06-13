@@ -147,11 +147,7 @@ void RestartImCap(tCamera *Camera);
 void queueErrorHandling(tCamera *Camera);
 
 void Process(tCamera *Camera);
-void ProcessPY(tCamera *Camera, valarray<unsigned char> imarr);
-void ProcessH(tCamera *Camera, valarray<unsigned char> imarr);
-
-bool saveim(tCamera *Camera, valarray<unsigned char> imarr, const char* filename, info im, params val);
-bool saveim_H(tCamera *Camera, valarray<unsigned char> imarr, const char* filename, info_H im, params_H val);
+bool saveim(tCamera *Camera, valarray<unsigned char> imarr, const char* filename);
 
 int readfits(const char* filename, valarray<unsigned char>& contents, int &nelements, int &width);
 
@@ -770,70 +766,63 @@ void handle_timeout(tCamera *Camera)
 
 
 /*=============================================================================================
-  Get image out of framebuffer, determine which type of processing to do
-  completely done with camera framebuffer after this function
+  Process and optionally save the current image buffer from a camera
   ========================================================================================== */
 void Process(tCamera *Camera)
 {
     ++Camera->pcount;
 
+    // create copy of image buffer
     valarray<unsigned char> imarr((unsigned char*)Camera->Frames[Camera->BufferIndex].ImageBuffer, Camera->FrameHeight*Camera->FrameWidth);
 
-    if(is_pyc(Camera)) {
-        //cout<<"ProcessPY\n";
-        ProcessPY(Camera, imarr);
-    } else {
-        //cout<<"ProcessH\n";
-        ProcessH(Camera, imarr);
-    }
-}
-// _________________________________________________________________________________________end
-
-
-/* =============================================================================================
-   Set-up structs/vars for analysis. Determine if live or test image. Save.
-  ========================================================================================== */
-void ProcessPY(tCamera *Camera, valarray<unsigned char> imarr)
-{
     //1. init stucts and variables
     prog_c con;
     init_prog_c(con);
+
+    // FIXME: should not do both, but can't fix here
+    // Stuff for pitch-yaw camera
     params val;
     init_params(val, (int)Camera->FrameWidth, (int)(Camera->FrameHeight*Camera->FrameWidth));
     //init_params(val, 449, 144129); //for small live frame
     info im;
     init_im(im);
+    // Stuff for roll camera
+    params_H val_H;
+    init_params_H(val_H, (int)Camera->FrameWidth, (int)(Camera->FrameHeight*Camera->FrameWidth));
+    info_H im_H;
+    init_H(im_H);
+
     timeval t;
 
     //2. analyze live or test image?
-    if(con.live) {
-        if(con.c_timer)
-            tester(1,t,0);
-        analyzePY(im, val, imarr);
-        if(con.c_timer) {
-            cout<<"Analysis ";
-            tester(2,t,0);
-        }
-        if(con.diag)
-            diagnostics(val, im);
-    } else {
+    if(is_pyc(Camera) && !con.live) {
         const char* filename1 = "~/GRASPcode/tstimages/tstim2.fits";        //sun is 330 pix
         //const char* filename1 = "~/GRASPcode/tstimages/dimsun1_960x1290_bw.fits";    //sun is 195 pixels
         //const char* filename1 = "~/GRASPcode/tstimages/dimsun1.fits";                        //sun is        <80
         readfits(filename1, imarr, val.nel, val.width);
-        if(con.c_timer)
-            tester(1,t,0);
+    }
+
+    if(con.c_timer)
+        tester(1,t,0);
+    if(is_pyc(Camera)) {
         analyzePY(im, val, imarr);
-        if(con.c_timer) {
-            cout<<"Test Im Analysis ";
-            tester(2,t,0);
-        }
-        if(con.diag)
+    } else {
+        //analyzeH(im_H, val_H, imarr);
+    }
+    if(con.c_timer) {
+        cout<<"Analysis ";
+        tester(2,t,0);
+    }
+    if(con.diag) {
+        if(is_pyc(Camera)) {
             diagnostics(val, im);
+        } else {
+            diag_H(val_H, im_H);
+        }
     }
 
     //drawline at centers? This will be saved in the image below
-    if(val.drawline) {
+    if(is_pyc(Camera) && val.drawline) {
         drawline(imarr, val, im);
     }
 
@@ -845,7 +834,9 @@ void ProcessPY(tCamera *Camera, valarray<unsigned char> imarr)
         //filename << "images/" << Camera->UID << "_" << Camera->BufferIndex<<".fits"; //circular filename buffer
         if(con.c_timer)
             tester(1,t,0);
-        if((Camera->savecount % SAVE_1_OF_EVERY_N) == 0) saveim(Camera, imarr, filename.str().c_str(), im, val);
+        if((Camera->savecount % SAVE_1_OF_EVERY_N) == 0) {
+            saveim(Camera, imarr, filename.str().c_str());
+        }
         Camera->savecount++;
         if(con.c_timer) {
             cout<<"Saving ";
@@ -853,84 +844,17 @@ void ProcessPY(tCamera *Camera, valarray<unsigned char> imarr)
         }
         filename.seekp(0);
      }
-
-    //    pthread_detach(pthread_self());
-    //    pthread_exit(NULL);
 }
 // __________________________________________________________________________________________end
 
 
 /* =============================================================================================
-   Process Horizon Sensor Data
-            Needs: some diagnostic to show that the horizon sensor is operating correctly
+   Saves a FITS file
    ========================================================================================== */
-void ProcessH(tCamera *Camera, valarray<unsigned char> imarr)
-{
-    //1. init stucts and variables
-    prog_c con;
-    init_prog_c(con);
-    params_H val;
-    init_params_H(val, (int)Camera->FrameWidth, (int)(Camera->FrameHeight*Camera->FrameWidth));
-    info_H im;
-    init_H(im);
-    timeval t;
-
-    //2. analyze live or test image?
-    if(con.live) {
-        if(con.c_timer)
-            tester(1,t,0);
-        //analyzeH(im, val, imarr);
-        if(con.c_timer) {
-            cout<<"Analysis ";
-            tester(2,t,0);
-        }
-        if(con.diag)
-            diag_H(val, im);
-    } else {
-        //const char* filename1 = "~/GRASPcode/tstimages/dimsun2.fits";
-        //readfits(filename1, imarr, val.nel, val.width);
-        if(con.c_timer)
-            tester(1,t,0);
-        analyzeH(im, val, imarr);
-        if(con.c_timer) {
-            cout<<"Analysis ";
-            tester(2,t,0);
-        }
-        if(con.diag)
-            diag_H(val, im);
-    }
-
-    //3. save image
-    if(Camera->WantToSave) {
-        //create filename
-        ostringstream filename;
-        filename << "images/" << Camera->UID << "_" << Camera->TimeStamps[Camera->BufferIndex]
-                                            <<"_"<< Camera->savecount<<".fits";
-        //filename << "images/" << Camera->UID << "_" << Camera->BufferIndex<<".fits";
-        if(con.c_timer)
-            tester(1,t,0);
-        if((Camera->savecount % SAVE_1_OF_EVERY_N) == 0) saveim_H(Camera, imarr, filename.str().c_str(), im, val); //set-up as bool, return true if ok, error msg if not
-        Camera->savecount++;
-        if(con.c_timer) {
-            cout<<"Saving ";
-            tester(2,t,0);
-        }
-        filename.seekp(0);
-     }
-
-    //    pthread_detach(pthread_self());
-    //    pthread_exit(NULL);
-}
-// __________________________________________________________________________________________end
-
-
-/* =============================================================================================
-   Saves a fits file
-   ========================================================================================== */
-bool saveim(tCamera *Camera, valarray<unsigned char> imarr, const char* filename, info im, params val)
+bool saveim(tCamera *Camera, valarray<unsigned char> imarr, const char* filename)
 {
     using namespace CCfits;
-    using std::valarray;
+    //using std::valarray;
 
     FITS::setVerboseMode(true);
 
@@ -949,7 +873,6 @@ bool saveim(tCamera *Camera, valarray<unsigned char> imarr, const char* filename
             std::cout<<"Couldn't create FITS file. The file might already exist. \n";
             return false;
         }
-
 
         //append keys to the primary header
         //long exposure(1500);
@@ -975,15 +898,15 @@ bool saveim(tCamera *Camera, valarray<unsigned char> imarr, const char* filename
     //its customary to have compressed images in 1st Ext
     ExtHDU* imageExt;
     std::vector<long> extAx;
-    extAx.push_back(val.width);
-    extAx.push_back(val.nel/val.width);
+    extAx.push_back(Camera->FrameWidth);
+    extAx.push_back(Camera->FrameHeight);
 
     string newName ("Raw Image");
     long fpixel(1);
 
     try {
         imageExt = pFits->addImage(newName,BYTE_IMG,extAx, 1);
-        imageExt->write(fpixel,val.nel,imarr);    //write extension
+        imageExt->write(fpixel,Camera->FrameWidth*Camera->FrameHeight,imarr);    //write extension
         //std::cout << pFits->pHDU() << std::endl;
     } catch (FitsException) {
         std::cout<<"Couldn't write image to extension\n";
