@@ -76,8 +76,8 @@
 uint8_t command_sequence_number = -1;
 uint8_t latest_system_id = 0xFF;
 uint8_t latest_command_key = 0xFF;
-uint8_t py_image_counter = 0;
-uint8_t roll_image_counter = 0;
+volatile uint8_t py_image_counter = 0;
+volatile uint8_t roll_image_counter = 0;
 float grid_rotation_rate = -1;
 struct dmminfo DMM1;
 float temp_py = 0, temp_roll = 0, temp_mb = 0;
@@ -336,7 +336,9 @@ void *TelemetryScienceThread(void *threadargs)
         uint8_t quality_bitfield = 0;
         tp << quality_bitfield;
 
-        tp << py_image_counter << roll_image_counter;
+        uint8_t count1 = py_image_counter;
+        uint8_t count2 = roll_image_counter;
+        tp << count1 << count2;
         py_image_counter = 0;
         roll_image_counter = 0;
 
@@ -525,6 +527,26 @@ void *CommandHandlerThread(void *threadargs)
             } //switch for command key
             break;
         case SYS_ID_PYC:
+            switch(my_data->command_key & 0xF)
+            {
+                case 0x4: //Set FPS
+                    break;
+                case 0x5: //Set gain
+                    break;
+                case 0x6: //Set exposure
+                    break;
+                case 0xC: //Send latest image
+                    TRANSMIT_NEXT_PY_IMAGE = true;
+                    error_code = 0;
+                    break;
+                case 0xD: //Send specific image
+                    break;
+                default:
+                    std::cerr << "Unknown command\n";
+                    error_code = ACK_BADCOM; //unknown command
+                    response = my_data->command_key;
+            } //switch for command key
+            break;
         case SYS_ID_RC:
             switch(my_data->command_key & 0xF)
             {
@@ -535,6 +557,8 @@ void *CommandHandlerThread(void *threadargs)
                 case 0x6: //Set exposure
                     break;
                 case 0xC: //Send latest image
+                    TRANSMIT_NEXT_R_IMAGE = true;
+                    error_code = 0;
                     break;
                 case 0xD: //Send specific image
                     break;

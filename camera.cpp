@@ -27,6 +27,7 @@
 #include <signal.h>
 #include <arpa/inet.h>
 #include <pthread.h>
+
 #include "a_PY.h"
 #include "a_H.h"
 #include "control.h"
@@ -34,6 +35,7 @@
 #include "network/UDPSender.hpp"
 #include "main.hpp"
 #include "oeb.h"
+#include "Image.hpp"
 
 //PvApi libraries
 #include <PvApi.h>
@@ -66,6 +68,7 @@ struct tCamera
     unsigned long    UID;
     unsigned long    ExposureLength;
     unsigned long    Gain;
+    uint64_t         Clock; //from the odds & ends board
 
     tPvFrame         Frames[FRAMESCOUNT];
     //valarray<unsigned char> imarr[FRAMESCOUNT]; //each valarray is sized 0, resized in setup
@@ -73,7 +76,7 @@ struct tCamera
     char             TimeStamps[FRAMESCOUNT][23];
     volatile bool    NewFlags[FRAMESCOUNT];
     unsigned int     Cadence;
-    unsigned int     BufferIndex; //FIXME: threads could collide here
+    unsigned int     BufferIndex; //FIXME: not thread-safe
     unsigned int     FrameHeight;
     unsigned int     FrameWidth;
     volatile bool    PauseCapture;
@@ -113,6 +116,7 @@ unsigned long NUMOFCAMERAS = 0;        // Actual number of cameras detected.
 unsigned int TICKS_PER_SECOND; // Total number of ticks per second
 volatile unsigned int CURRENT_TICK = 0;
 bool PAUSEPROGRAM = false;
+volatile bool TRANSMIT_NEXT_PY_IMAGE = false, TRANSMIT_NEXT_R_IMAGE = false;
 tCamera CAMERAS[MAXNUMOFCAMERAS];
 // __________________________________________________________________________________________end
 
@@ -148,6 +152,7 @@ void queueErrorHandling(tCamera *Camera);
 
 void Process(tCamera *Camera);
 bool saveim(tCamera *Camera, valarray<unsigned char> imarr, const char* filename);
+void transmit_image(tCamera *Camera, valarray<unsigned char> imarr);
 
 int readfits(const char* filename, valarray<unsigned char>& contents, int &nelements, int &width);
 
@@ -230,7 +235,7 @@ int camera_main()
 
 
 /* =============================================================================================
-   Very simply function to check whether a camera is the pitch-yaw camera
+   Very simple function to check whether a camera is the pitch-yaw camera
    Could be made fancier by checking for the roll camera or unknown cameras
    ========================================================================================== */
 bool is_pyc(tCamera *Camera)
@@ -771,6 +776,13 @@ void handle_timeout(tCamera *Camera)
 void Process(tCamera *Camera)
 {
     ++Camera->pcount;
+    if(is_pyc(Camera)) {
+        Camera->Clock = oeb_get_pyc();
+        py_image_counter++;
+    } else {
+        Camera->Clock = oeb_get_rc();
+        roll_image_counter++;
+    }
 
     // create copy of image buffer
     valarray<unsigned char> imarr((unsigned char*)Camera->Frames[Camera->BufferIndex].ImageBuffer, Camera->FrameHeight*Camera->FrameWidth);
@@ -806,8 +818,16 @@ void Process(tCamera *Camera)
         tester(1,t,0);
     if(is_pyc(Camera)) {
         analyzePY(im, val, imarr);
+        if(TRANSMIT_NEXT_PY_IMAGE) {
+            transmit_image(Camera, imarr);
+            TRANSMIT_NEXT_PY_IMAGE = false;
+        }
     } else {
         //analyzeH(im_H, val_H, imarr);
+        if(TRANSMIT_NEXT_R_IMAGE) {
+            transmit_image(Camera, imarr);
+            TRANSMIT_NEXT_R_IMAGE = false;
+        }
     }
     if(con.c_timer) {
         cout<<"Analysis ";
@@ -844,6 +864,32 @@ void Process(tCamera *Camera)
         }
         filename.seekp(0);
      }
+}
+// __________________________________________________________________________________________end
+
+
+/*=============================================================================================
+  Transmit a whole image
+  ========================================================================================== */
+void transmit_image(tCamera *Camera, valarray<unsigned char> imarr)
+{
+    cout << "Transmitting image from camera " << Camera->UID << endl;
+
+    ImagePacketQueue ipq;
+
+    ipq.add_partial_array(is_pyc(Camera) ? 0 : 1, Camera->FrameHeight, Camera->FrameWidth,
+                          0, Camera->FrameHeight, 0, Camera->FrameWidth / 2, (uint8_t *)&(imarr[0]),
+                          Camera->Clock, false);
+    ipq.add_partial_array(is_pyc(Camera) ? 0 : 1, Camera->FrameHeight, Camera->FrameWidth,
+                          0, Camera->FrameHeight, 0, Camera->FrameWidth / 2, (uint8_t *)&(imarr[0]),
+                          Camera->Clock, true);
+
+    ImagePacket ip(NULL);
+    cout << ipq.size() << " image packets to add to queue\n";
+    while(!ipq.empty()) {
+        ipq >> ip;
+        tm_packet_queue << ip;
+    }
 }
 // __________________________________________________________________________________________end
 
