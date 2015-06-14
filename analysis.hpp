@@ -9,7 +9,7 @@ using namespace std;
    ========================================================================================== */
 struct info            //info are data products
 {
-    unsigned char histogram[256];
+    float histogram[256];
 
     // Pitch-yaw image analysis
     bool there[3];                                    //true = its there

@@ -791,14 +791,13 @@ void Process(tCamera *Camera)
     init_params(val, Camera->FrameWidth, Camera->FrameHeight);
 
     timeval t;
-
     //2. analyze live or test image?
     if(!con.live) {
         if(is_pyc(Camera)) {
-            const char* filename1 = "tstim2.fits";        //sun is 330 pix
+            const char* filename1 = "mock_py.fits";        //sun is 330 pix
             readfits(filename1, imarr, val.width, val.height);
         } else {
-            const char* filename1 = "ras_130921_190000_217_000369.fits";
+            const char* filename1 = "mock_r.fits";
             readfits(filename1, imarr, val.width, val.height);
         }
     }
@@ -839,7 +838,7 @@ void Process(tCamera *Camera)
     if(Camera->WantToSave) {
         //create filename
         ostringstream filename;
-        filename << "images/" << Camera->UID << "_" << Camera->TimeStamps[Camera->BufferIndex]<<"_"<< Camera->savecount<<".fits";
+        filename << "images/" << (is_pyc(Camera) ? "py_" : "r_") << Camera->TimeStamps[Camera->BufferIndex]<<"_"<< Camera->savecount<<".fits";
         //filename << "images/" << Camera->UID << "_" << Camera->BufferIndex<<".fits"; //circular filename buffer
         if(con.c_timer)
             tester(1,t,0);
@@ -1060,7 +1059,8 @@ int readfits(const char* filename, valarray<unsigned char>& contents, unsigned i
     //FITS::setVerboseMode(true);
 
     std::auto_ptr<FITS> pInfile(new FITS( filename ,Read,true));
-    PHDU& image = pInfile->pHDU();
+    //PHDU& image = pInfile->pHDU();
+    ExtHDU& image = pInfile->extension("Raw Frame");
 
     // read all user-specifed, coordinate, and checksum keys in the image
     image.readAllKeys();

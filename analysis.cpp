@@ -386,14 +386,14 @@ void drawline(valarray<unsigned char>& imarr, params val, info im)
 bool analyzeR(info &im, params val, valarray<unsigned char> &imarr)
 {
     unsigned int subheight = 100;
-    unsigned int subwidth = val.width / 5;
+    unsigned int subwidth = val.width / 10;
     unsigned long total[3] = {0, 0, 0};
     unsigned long total_squares[3] = {0, 0, 0};
 
-    unsigned long index = (val.height - subheight) / 2;
+    unsigned long index = val.width * (val.height - subheight) / 2;
     for(unsigned int row = 0; row < subheight; row++) {
         for(unsigned int col = 0; col < val.width; col++) {
-            //im.histogram[imarr[index]]++;
+            im.histogram[imarr[index]] += 1;
             if(col < subwidth) {
                 total[0] += imarr[index];
                 total_squares[0] += imarr[index] * imarr[index];
@@ -406,6 +406,11 @@ bool analyzeR(info &im, params val, valarray<unsigned char> &imarr)
             }
             index++;
         }
+    }
+
+    //mormalize histogram
+    for(unsigned int i = 0; i < 256; i++) {
+        im.histogram[i] /= subheight * val.width;
     }
 
     unsigned long n = subheight * subwidth;
@@ -424,6 +429,7 @@ bool analyzeR(info &im, params val, valarray<unsigned char> &imarr)
    ========================================================================================== */
 void reportR(params val, info im)
 {
+    cout << val.width << "x" << val.height << endl;
     cout<<"mean: "<<im.mean[0]<<", "<<im.mean[1]<<" , "<<im.mean[2]<<endl;
     cout<<"stdev: "<<im.stdev[0]<<", "<<im.stdev[1]<<" , "<<im.stdev[2]<<endl;
     cout<<"\n";
