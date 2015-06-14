@@ -148,8 +148,8 @@ void RestartImCap(tCamera *Camera);
 void queueErrorHandling(tCamera *Camera);
 
 void Process(tCamera *Camera);
-bool saveim(tCamera *Camera, valarray<unsigned char> imarr, const char* filename);
-void transmit_image(tCamera *Camera, valarray<unsigned char> imarr);
+bool saveim(tCamera *Camera, valarray<unsigned char> &imarr, const char* filename);
+void transmit_image(tCamera *Camera, valarray<unsigned char> &imarr);
 
 int readfits(const char* filename, valarray<unsigned char>& contents, int &nelements, int &width);
 
@@ -802,9 +802,7 @@ void Process(tCamera *Camera)
 
     //2. analyze live or test image?
     if(is_pyc(Camera) && !con.live) {
-        const char* filename1 = "~/GRASPcode/tstimages/tstim2.fits";        //sun is 330 pix
-        //const char* filename1 = "~/GRASPcode/tstimages/dimsun1_960x1290_bw.fits";    //sun is 195 pixels
-        //const char* filename1 = "~/GRASPcode/tstimages/dimsun1.fits";                        //sun is        <80
+        const char* filename1 = "tstim2.fits";        //sun is 330 pix
         readfits(filename1, imarr, val.nel, val.width);
     }
 
@@ -865,7 +863,7 @@ void Process(tCamera *Camera)
 /*=============================================================================================
   Transmit a whole image
   ========================================================================================== */
-void transmit_image(tCamera *Camera, valarray<unsigned char> imarr)
+void transmit_image(tCamera *Camera, valarray<unsigned char> &imarr)
 {
     cout << "Transmitting image from camera " << Camera->UID << endl;
 
@@ -891,7 +889,7 @@ void transmit_image(tCamera *Camera, valarray<unsigned char> imarr)
 /* =============================================================================================
    Saves a FITS file
    ========================================================================================== */
-bool saveim(tCamera *Camera, valarray<unsigned char> imarr, const char* filename)
+bool saveim(tCamera *Camera, valarray<unsigned char> &imarr, const char* filename)
 {
     using namespace CCfits;
     //using std::valarray;
@@ -945,68 +943,8 @@ bool saveim(tCamera *Camera, valarray<unsigned char> imarr, const char* filename
     long fpixel(1);
 
     try {
-        imageExt = pFits->addImage(newName,BYTE_IMG,extAx, 1);
-        imageExt->write(fpixel,Camera->FrameWidth*Camera->FrameHeight,imarr);    //write extension
-        //std::cout << pFits->pHDU() << std::endl;
-    } catch (FitsException) {
-        std::cout<<"Couldn't write image to extension\n";
-    }
-
-    return true;
-}
-// __________________________________________________________________________________________end
-
-
-/* =============================================================================================
-   Saves a fits file
-   ========================================================================================== */
-bool saveim_H(tCamera *Camera, valarray<unsigned char> imarr, const char* filename, info_H im, params_H val)
-{
-    using namespace CCfits;
-    using std::valarray;
-
-    FITS::setVerboseMode(true);
-
-    //create pointer to fits object
-    std::auto_ptr<FITS> pFits(0);
-    //std::valarray<unsigned char> imarr((char*)Camera->Frames[j].ImageBuffer, nelements);
-
-    //for running loop tests
-    remove(filename);
-    //std::cout<<"here\n";
-
-    try {
-        //create new fits file
-        try {
-           pFits.reset( new FITS(filename , BYTE_IMG , 0 , 0 ) ); //reset=deallocate object and reset its value. change to BYTE_IMG?
-        } catch (FITS::CantCreate) {
-          std::cout<<"Couldn't create FITS file. The file might already exist. \n";
-          return false;
-        }
-
-        //append keys to the primary header
-        //long exposure(1500);
-        pFits->pHDU().addKey("Camera",(long)Camera->UID, "Camera UID");
-        pFits->pHDU().addKey("Save Count",(int)Camera->savecount, "Num of Saved Images");
-        pFits->pHDU().addKey("Snap Count",(int)Camera->snapcount, "Num of SNAPS");
-        pFits->pHDU().addKey("Exposure",(long)Camera->ExposureLength, "for cameanalyzera");
-        pFits->pHDU().addKey("filename", filename, "Name of the file");
-    } catch (FitsException&) {
-        std::cerr << " Fits Exception Thrown.  \n";
-    }
-
-    //store data in an extension HDU
-    //its customary to have compressed images in 1st Ext
-    ExtHDU* imageExt;
-    std::vector<long> extAx;
-    extAx.push_back(val.width);
-    extAx.push_back(val.nel/val.width);
-    string newName ("Raw Image");
-    long fpixel(1);
-
-    try {
-        imageExt = pFits->addImage(newName,BYTE_IMG,extAx, 1);
-        imageExt->write(fpixel,val.nel,imarr);    //write extension
+        imageExt = pFits->addImage(newName, BYTE_IMG, extAx, 1);
+        imageExt->write(fpixel, Camera->FrameWidth*Camera->FrameHeight, imarr);    //write extension
         //std::cout << pFits->pHDU() << std::endl;
     } catch (FitsException) {
         std::cout<<"Couldn't write image to extension\n";
