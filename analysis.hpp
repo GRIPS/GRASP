@@ -9,6 +9,8 @@ using namespace std;
    ========================================================================================== */
 struct info            //info are data products
 {
+    unsigned char histogram[256];
+
     // Pitch-yaw image analysis
     bool there[3];                                    //true = its there
     //bool wsun[3];                                     //true = too close to edge. change to esun if needed
@@ -24,13 +26,14 @@ struct info            //info are data products
     //char? time;                        //what format? need to get from the original fits file & control program. h m s us all diff vars?
 
     // Roll image analysis
-    int vals[6];                            //crude check for saturation, look @ range. top pixel, top-reject, 3/4,  mid, 1/4,  min
+    float mean[3]; // left/middle/right strips
+    float stdev[3]; // left/middle/right strips
 };
 
 struct params        //parameters control the program and define variables
 {
-    int width;                                    //width of the image
-    int nel;                                            //nelements
+    unsigned int width;
+    unsigned int height;
 
     //analysis control
     int Rs;                                                //pixel radius of the sun
@@ -55,19 +58,22 @@ struct params        //parameters control the program and define variables
 /* =============================================================================================
    Function declarations
    ========================================================================================== */
+
+bool init_params(params& val, unsigned int w_in, unsigned int h_in);
+
+bool analyzePY(info &im, params val, valarray<unsigned char> &imarr);
 bool Find_3_mask(valarray<unsigned char> &imarr, params& val, info& im);
 bool find_thresh(valarray<unsigned char> &imarr, unsigned char thresh[], params val);
 bool crop(valarray<unsigned char>& imarr, const char* fn,float x, float y, params val);
-void timetest(int x, timeval& t1, int i);
-bool init_params(params& val, int w_in, int n_in); //changed from a7
-bool analyzePY(info& im,  params val, valarray<unsigned char> &imarr);
-void diagnostics(params val, info im);
-bool savefits(valarray<unsigned char>& newarr, const char* filename, int nelements, int width);
 void centroid(valarray<unsigned short>& mask, params val, float& xloc, float& yloc, bool& there);
 void drawline(valarray<unsigned char>& imarr, params val, info im);
 
-bool analyzeH(info& im,  params val, valarray<unsigned char> &imarr);
-bool sort_H(info& im, params val, valarray<unsigned char> &imarr);
-bool diag_H(params val, info im);
+bool analyzeR(info &im, params val, valarray<unsigned char> &imarr);
+
+void reportPY(params val, info im);
+void reportR(params val, info im);
+
+void timetest(int x, timeval& t1, int i);
+//bool savefits(valarray<unsigned char>& newarr, const char* filename, int nelements, int width);
 
 #endif

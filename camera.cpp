@@ -46,7 +46,7 @@
 /* =============================================================================================
    Declaration of namespaces and definitions
    ========================================================================================== */
-using namespace std; //the global namespace, CCfits used loacally in savefits
+using namespace std; //the global namespace, CCfits used locally in saveim
 
 //#define    _STDCALL
 // _____________________________________________________________________________________________
@@ -151,7 +151,7 @@ void Process(tCamera *Camera);
 bool saveim(tCamera *Camera, valarray<unsigned char> &imarr, const char* filename);
 void transmit_image(tCamera *Camera, valarray<unsigned char> &imarr);
 
-int readfits(const char* filename, valarray<unsigned char>& contents, int &nelements, int &width);
+int readfits(const char* filename, valarray<unsigned char>& contents, unsigned int &width, unsigned int &height);
 
 //not currently used
 void CameraStop(tCamera *Camera);
@@ -788,14 +788,19 @@ void Process(tCamera *Camera)
     info im;
     memset(&im, 0, sizeof(info));
     params val;
-    init_params(val, (int)Camera->FrameWidth, (int)(Camera->FrameHeight*Camera->FrameWidth));
+    init_params(val, Camera->FrameWidth, Camera->FrameHeight);
 
     timeval t;
 
     //2. analyze live or test image?
-    if(is_pyc(Camera) && !con.live) {
-        const char* filename1 = "tstim2.fits";        //sun is 330 pix
-        readfits(filename1, imarr, val.nel, val.width);
+    if(!con.live) {
+        if(is_pyc(Camera)) {
+            const char* filename1 = "tstim2.fits";        //sun is 330 pix
+            readfits(filename1, imarr, val.width, val.height);
+        } else {
+            const char* filename1 = "ras_130921_190000_217_000369.fits";
+            readfits(filename1, imarr, val.width, val.height);
+        }
     }
 
     if(con.c_timer)
@@ -807,7 +812,7 @@ void Process(tCamera *Camera)
             TRANSMIT_NEXT_PY_IMAGE = false;
         }
     } else {
-        //analyzeH(im, val, imarr);
+        analyzeR(im, val, imarr);
         if(TRANSMIT_NEXT_R_IMAGE) {
             transmit_image(Camera, imarr);
             TRANSMIT_NEXT_R_IMAGE = false;
@@ -819,9 +824,9 @@ void Process(tCamera *Camera)
     }
     if(con.diag) {
         if(is_pyc(Camera)) {
-            diagnostics(val, im);
+            reportPY(val, im);
         } else {
-            diag_H(val, im);
+            reportR(val, im);
         }
     }
 
@@ -931,7 +936,7 @@ bool saveim(tCamera *Camera, valarray<unsigned char> &imarr, const char* filenam
     extAx.push_back(Camera->FrameWidth);
     extAx.push_back(Camera->FrameHeight);
 
-    string newName ("Raw Image");
+    string newName ("Raw Frame");
     long fpixel(1);
 
     try {
@@ -1048,10 +1053,9 @@ void FrameStats(tCamera *Camera)
 /* =============================================================================================
    Read a fits file
    ========================================================================================== */
-int readfits(const char* filename, valarray<unsigned char>& contents, int &nelements, int &width)
+int readfits(const char* filename, valarray<unsigned char>& contents, unsigned int &width, unsigned int &height)
 {
     using namespace CCfits;
-    using std::valarray;
 
     //FITS::setVerboseMode(true);
 
@@ -1059,14 +1063,12 @@ int readfits(const char* filename, valarray<unsigned char>& contents, int &nelem
     PHDU& image = pInfile->pHDU();
 
     // read all user-specifed, coordinate, and checksum keys in the image
-     image.readAllKeys();
-     image.read(contents);
+    image.readAllKeys();
+    image.read(contents);
 
     //axes
-    int idx = 0;
-    width = (int)image.axis(idx);
-    int height = (int)image.axis(idx+1);
-    nelements = width * height;
+    width = image.axis(0);
+    height = image.axis(1);
 
     //cout<<"width: "<<width<<endl;
     //cout<<"height: "<<height<<endl;
