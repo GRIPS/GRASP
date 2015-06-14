@@ -785,18 +785,10 @@ void Process(tCamera *Camera)
     prog_c con;
     init_prog_c(con);
 
-    // FIXME: should not do both, but can't fix here
-    // Stuff for pitch-yaw camera
+    info im;
+    memset(&im, 0, sizeof(info));
     params val;
     init_params(val, (int)Camera->FrameWidth, (int)(Camera->FrameHeight*Camera->FrameWidth));
-    //init_params(val, 449, 144129); //for small live frame
-    info im;
-    init_im(im);
-    // Stuff for roll camera
-    params_H val_H;
-    init_params_H(val_H, (int)Camera->FrameWidth, (int)(Camera->FrameHeight*Camera->FrameWidth));
-    info_H im_H;
-    init_H(im_H);
 
     timeval t;
 
@@ -815,7 +807,7 @@ void Process(tCamera *Camera)
             TRANSMIT_NEXT_PY_IMAGE = false;
         }
     } else {
-        //analyzeH(im_H, val_H, imarr);
+        //analyzeH(im, val, imarr);
         if(TRANSMIT_NEXT_R_IMAGE) {
             transmit_image(Camera, imarr);
             TRANSMIT_NEXT_R_IMAGE = false;
@@ -829,7 +821,7 @@ void Process(tCamera *Camera)
         if(is_pyc(Camera)) {
             diagnostics(val, im);
         } else {
-            diag_H(val_H, im_H);
+            diag_H(val, im);
         }
     }
 

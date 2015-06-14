@@ -81,6 +81,8 @@ bool init_params(params& val, int w_in, int n_in)
     //val.drawline=true;
     val.drawline = false;
 
+    val.reject = 100;
+
     return true;
 }
 // __________________________________________________________________________________________end
@@ -410,38 +412,9 @@ void drawline(valarray<unsigned char>& imarr, params val, info im)
 
 
 /* =============================================================================================
-            Initialize the info struct
-   ========================================================================================== */
-bool init_H(info_H im)
-{
-        for(int i=0; i<6; i++)
-                    im.vals[i]=0;
-
-        return true;
-}
-// __________________________________________________________________________________________end
-
-
-/* =============================================================================================
-            Initialize parameter struct
-   ========================================================================================== */
-bool init_params_H(params_H& val, int width, int nel)
-{
-    val.width = width;
-    val.nel = nel;
-
-    val.reject = 100;
-    val.comp = 2;
-
-    return true;
-}
-// __________________________________________________________________________________________end
-
-
-/* =============================================================================================
             The main function to call for analysis of the H images
    ========================================================================================== */
-bool analyzeH(info_H& im,  params_H val, valarray<unsigned char> &imarr)
+bool analyzeH(info& im,  params val, valarray<unsigned char> &imarr)
 {
     //are we going to do any analysis? or just checks?
 
@@ -461,7 +434,7 @@ bool analyzeH(info_H& im,  params_H val, valarray<unsigned char> &imarr)
 /* =============================================================================================
             crude check
    ========================================================================================== */
-bool sort_H(info_H& im, params_H val, valarray<unsigned char> &imarr)
+bool sort_H(info& im, params val, valarray<unsigned char> &imarr)
 {
 /*    valarray<unsigned char> cim(imarr[slice(0, (val.nel/val.comp), val.comp)]);
     sort(&cim[0], &cim[(val.nel/val.comp)-1]);
@@ -479,7 +452,7 @@ bool sort_H(info_H& im, params_H val, valarray<unsigned char> &imarr)
 // __________________________________________________________________________________________end
 
 
-bool diag_H(params_H val, info_H im)
+bool diag_H(params val, info im)
 {
     return true;
 }
