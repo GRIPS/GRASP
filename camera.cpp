@@ -220,7 +220,7 @@ int camera_main()
         // Uninitialize the API.
         PvUnInitialize();
 
-        printf("\nEnd of program reached.\n\n");
+        printf("\nEnd of camera main reached.\n\n");
 
     } else
         printf("\nFailed to initialize the API. Program terminating.\n\n");
@@ -489,9 +489,9 @@ bool CameraStart(tCamera *Camera)
     // Auto adjust the packet size to the maximum supported by the network; usually 8228,
     // but 6000 for the current hardware.
     if(PvCaptureAdjustPacketSize(Camera->Handle, 6000)== ePvErrSuccess )
-        cout << "Packet Size sucessfully determined.\n\n";
+        cout << "Packet Size sucessfully determined.\n";
     else
-        cout << "Possible Packet Size issue.\n\n";
+        cout << "Possible Packet Size issue.\n";
 
     // Determine how big the frame buffers should be and set the exposure value.
     if(!PvAttrUint32Get(Camera->Handle, "TotalBytesPerFrame", &FrameSize)

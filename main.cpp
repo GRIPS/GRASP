@@ -258,20 +258,8 @@ void *TelemetryHousekeepingThread(void *threadargs)
         TelemetryPacket tp(SYS_ID_ASP, TM_HOUSEKEEPING, tm_frame_sequence_number, oeb_get_clock());
 
         uint8_t status_bitfield = 0;
-        #ifndef FAKE_TM
-
-        #else
-        status_bitfield = (tm_frame_sequence_number % 2) ? 0x7 : 0x0;
-        #endif
         tp << status_bitfield << latest_command_key;
 
-        #ifndef FAKE_TM
-
-        #else
-        temp_py = tm_frame_sequence_number;
-        temp_roll = tm_frame_sequence_number + 1;
-        temp_mb = tm_frame_sequence_number + 2;
-        #endif
         tp << (int16_t)(temp_py * 100) << (int16_t)(temp_roll * 100) << (int16_t)(temp_mb * 100);
 
         tm_packet_queue << tp;
@@ -289,27 +277,19 @@ void *TelemetryA2DThread(void *threadargs)
 
     uint32_t tm_frame_sequence_number = 0;
 
-    #ifndef FAKE_TM
-    InitDMM1();
-    #endif
+    InitDMM1(); //FIXME: this thread needs to stop if the DMM A2D board isn't present
 
     while(!stop_message[tid])
     {
         usleep_force(USLEEP_TM_A2D);
 
-        #ifndef FAKE_TM
         DMMUpdateADC(&DMM1);
-        #endif
 
         tm_frame_sequence_number++;
         TelemetryPacket tp(SYS_ID_ASP, TM_A2D, tm_frame_sequence_number, oeb_get_clock());
 
         for (int i = 0; i < 32; i++) {
-            #ifndef FAKE_TM
             tp << (uint16_t)DMM1.ain[i];
-            #else
-            tp << (uint16_t)(tm_frame_sequence_number + i);
-            #endif
         }
 
         tm_packet_queue << tp;
