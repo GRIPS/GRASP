@@ -1,8 +1,5 @@
 #define SAVE_1_OF_EVERY_N 10
 
-#define MAXNUMOFCAMERAS 2
-#define FRAMESCOUNT 5
-
 #define PY_CAM_ID 158434
 #define R_CAM_ID 142974
 
@@ -28,6 +25,7 @@
 #include <arpa/inet.h>
 #include <pthread.h>
 
+#include "camera.hpp"
 #include "analysis.hpp"
 #include "control.h"
 #include "main.hpp"
@@ -49,61 +47,6 @@
 using namespace std; //the global namespace, CCfits used locally in saveim
 
 //#define    _STDCALL
-// _____________________________________________________________________________________________
-
-/* =============================================================================================
-   Structure for camera data. The universal ID is unique to each camera and the handle allows
-   the program to interact with the camera. The frame(s) are filled with images as they are
-   taken.
-
-            The struct handles all error and diagnostic info
-   ========================================================================================== */
-struct tCamera
-{
-    //Camera handle and parameters
-    tPvHandle        Handle;
-    unsigned long    UID;
-    unsigned long    ExposureLength;
-    unsigned long    Gain;
-
-    timespec         ClockPC[FRAMESCOUNT];
-    uint64_t         ClockOEB[FRAMESCOUNT]; //from the odds & ends board
-
-    tPvFrame         Frames[FRAMESCOUNT];
-    //valarray<unsigned char> imarr[FRAMESCOUNT]; //each valarray is sized 0, resized in setup
-    //auto_ptr<CCfits::FITS> pFits[FRAMESCOUNT]; //vector of pointers
-    volatile bool    NewFlags[FRAMESCOUNT];
-    unsigned int     Cadence;
-    unsigned int     BufferIndex; //FIXME: not thread-safe!
-    unsigned int     FrameHeight;
-    unsigned int     FrameWidth;
-    volatile bool    PauseCapture;
-    volatile bool    WantToSave;
-    int idx;
-    pthread_t thread[FRAMESCOUNT];        //threads for snapping/processing
-
-    //error flags
-    volatile bool waitFlag;
-    int requeueFlag;
-    volatile bool frameandqueueFlag;
-    volatile bool triggerFlag;
-    volatile bool requeueCallFlag;
-    volatile bool timeoutFlag;
-
-    //diagnostics - which ones do i really still need?
-    int snapcount;
-    int savecount;
-    int unsuccount;    //frames that complete but are marked unsuccessful
-    int zerobitcount;    //number of frames with zero bit depth
-    int pcount;        //processed frames count
-    int framecount;
-    tPvErr queueStatus;
-    int frameandqueueErrors;
-    int queueErrors;
-    int TimeoutCount;
-    int queueError;
-    int to1;
-};
 // _____________________________________________________________________________________________
 
 
@@ -376,18 +319,18 @@ bool CameraSetup(tCamera *Camera)
     // Default settings are hard-coded, but should load from parameter table (FIXME)
     Camera->WantToSave = true;
     if(is_pyc(Camera)) {
-        Camera->Cadence = 1;
+        Camera->Rate = 1;
         Camera->ExposureLength = 20000;
         Camera->Gain = 0;
     } else {
-        Camera->Cadence = 1;
+        Camera->Rate = 1;
         Camera->ExposureLength = 4000;
         Camera->Gain = 0;
     }
 
     printf("%s camera settings: %u Hz, %lu us, %lu dB gain, %s\n",
            (is_pyc(Camera) ? "Pitch-yaw" : "Roll"),
-           Camera->Cadence, Camera->ExposureLength, Camera->Gain,
+           Camera->Rate, Camera->ExposureLength, Camera->Gain,
            (Camera->WantToSave ? "saving" : "NOT saving"));
 
     //define the pixel format. see camera and driver attributes p.15
@@ -438,8 +381,9 @@ int create_timer()
    ========================================================================================== */
 int arm_timer()
 {
+    TICKS_PER_SECOND = 0;
     for(unsigned int i = 0; i < NUMOFCAMERAS; i++) {
-        TICKS_PER_SECOND += CAMERAS[i].Cadence;
+        TICKS_PER_SECOND += CAMERAS[i].Rate;
     }
     cout << "This is the ticks per second: " << TICKS_PER_SECOND << "\n";
 
@@ -557,10 +501,10 @@ void CameraStop(tCamera *Camera)
   ========================================================================================== */
 int next_camera()
 {
-    if(CURRENT_TICK < 2 * MIN(CAMERAS[0].Cadence, CAMERAS[1].Cadence)) {
+    if(CURRENT_TICK < 2 * MIN(CAMERAS[0].Rate, CAMERAS[1].Rate)) {
         return CURRENT_TICK % 2;
     }
-    return CAMERAS[0].Cadence > CAMERAS[1].Cadence ? 0 : 1;
+    return CAMERAS[0].Rate > CAMERAS[1].Rate ? 0 : 1;
 }
 // _________________________________________________________________________________________end
 
@@ -1212,7 +1156,7 @@ void DisplayParameters()
     for(unsigned int i = 0; i < NUMOFCAMERAS; i++) {
         printf("Displaying settings for camera with ID %lu\n", CAMERAS[i].UID);
         printf("----------\n");
-        printf("Images per second: %d\n", CAMERAS[i].Cadence);
+        printf("Images per second: %d\n", CAMERAS[i].Rate);
         printf("Exposure time in microseconds: %lu\n", CAMERAS[i].ExposureLength);
         printf("Gain (dB): %lu\n", CAMERAS[i].Gain);
         if(CAMERAS[i].PauseCapture == true)

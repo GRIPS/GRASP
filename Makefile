@@ -21,7 +21,7 @@ clean:
 	make -C network clean
 	rm -f $(EXE)
 	rm -f *.o
-	rm -f main
+	rm -f main quick
 
 program:  $(SOURCES)
 	$(CC)  $(RPATH) $(TARGET) $(CFLAGS) $(SOURCES) -g -o $(EXE) $(SOLIB) $(PVLIB)  -I$(CCfits) -I$(cfitsio) -I$(cfitsiolib) -L$(CCfitslib) -lCCfits $(IMLIB)
@@ -29,9 +29,12 @@ program:  $(SOURCES)
 install:
 	cp -f $(EXE) $(BIN_DIR)
 
+quick: quick.o
+	$(CC) -o $@ $^ network/*.o -pthread
+
 dmm.o: dmm/dmm.c dmm/dmm.h
 	$(CC) $(CXXFLAGS) -c $<
 
 main: main.o oeb.o dmm.o camera.o analysis.o control.o Image.o
 	make -C network all
-	$(CC) -o main $^ -Inetwork -Idmm network/*.o -pthread -L$(CCfitslib) -lCCfits $(PVLIB) $(SOLIB) $(RPATH)
+	$(CC) -o $@ $^ network/*.o -pthread -L$(CCfitslib) -lCCfits $(PVLIB) $(SOLIB) $(RPATH)

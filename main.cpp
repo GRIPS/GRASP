@@ -514,6 +514,9 @@ void *CommandHandlerThread(void *threadargs)
             switch(my_data->command_key & 0xF)
             {
                 case 0x4: //Set FPS
+                    CAMERAS[0].Rate = *(uint16_t *)(my_data->payload);
+                    std::cout << "Setting pitch-yaw camera rate to " << CAMERAS[0].Rate << " Hz\n";
+                    error_code = arm_timer();
                     break;
                 case 0x5: //Set gain
                     break;
@@ -535,6 +538,9 @@ void *CommandHandlerThread(void *threadargs)
             switch(my_data->command_key & 0xF)
             {
                 case 0x4: //Set FPS
+                    CAMERAS[1].Rate = *(uint16_t *)(my_data->payload);
+                    std::cout << "Setting roll camera rate to " << CAMERAS[1].Rate << " Hz\n";
+                    error_code = arm_timer();
                     break;
                 case 0x5: //Set gain
                     break;
@@ -645,6 +651,7 @@ void cmd_process_command(CommandPacket &cp)
     std::cout << cp << std::endl;
 
     Thread_data tdata;
+    memset(&tdata, 0, sizeof(Thread_data));
     tdata.system_id = cp.getSystemID();
     tdata.command_key = cp.getCmdType();
     cp.setReadIndex(8);
