@@ -1,5 +1,8 @@
 #define SAVE_1_OF_EVERY_N 10
 
+#define TIMEOUT1 5
+#define TIMEOUT2 60
+
 #define PY_CAM_ID 158434
 #define R_CAM_ID 142974
 
@@ -27,7 +30,6 @@
 
 #include "camera.hpp"
 #include "analysis.hpp"
-#include "control.h"
 #include "main.hpp"
 #include "oeb.h"
 #include "Image.hpp"
@@ -313,9 +315,6 @@ bool CameraGrab()
    ========================================================================================== */
 bool CameraSetup(tCamera *Camera)
 {
-    prog_c con;
-    init_prog_c(con);
-
     // Default settings are hard-coded, but should load from parameter table (FIXME)
     Camera->WantToSave = true;
     if(is_pyc(Camera)) {
@@ -553,16 +552,9 @@ void *snap_thread(void *cam)
 
     //initalize variables & housekeeping
     tPvErr errCode;
-    //int count = 0;
-    prog_c con;
-    init_prog_c(con);
 
     //start snap only if we're done waiting for another frame to return (but doesn't protect frame buffer)
     if(Camera->Handle != NULL && !Camera->PauseCapture && !Camera->waitFlag) {
-        //snap on time? output to screen
-        //timeval t;
-        //tester(0, t, i);
-
         //set the exposure length and gain
         //TODO: check for failure?
         PvAttrUint32Set(Camera->Handle, "ExposureValue", Camera->ExposureLength);
@@ -584,27 +576,14 @@ void *snap_thread(void *cam)
                 cout<<"Trigger Software Error: ";
                 PrintError(errCode);
             }
-            //if(con.c_timer)
-            //    tester(1,t,0);
-            errCode = PvCaptureWaitForFrameDone(Camera->Handle,&(Camera->Frames[Camera->BufferIndex]),con.timeout1);
-            handle_wait(Camera, errCode, con.timeout2); //checks and updates waitflag and errCode
-            //if(con.c_timer) {
-            //    cout<<Camera->UID<<" ";
-            //    tester(2,t,0);
-            //}
+            errCode = PvCaptureWaitForFrameDone(Camera->Handle, &(Camera->Frames[Camera->BufferIndex]), TIMEOUT1);
+            handle_wait(Camera, errCode, TIMEOUT2); //checks and updates waitflag and errCode
 
             //Process: if done waiting, no timeout, successful frame & non-zero bitdepth
             //cout<<"image size: "<<Camera->Frames[Camera->BufferIndex].ImageSize<<endl;
             if(Camera->waitFlag== false && errCode == ePvErrSuccess) {
                 if( Camera->Frames[Camera->BufferIndex].Status == ePvErrSuccess && Camera->Frames[Camera->BufferIndex].BitDepth != 0) {
-                    //if(con.c_timer)
-                    //    tester(1,t,0);
                     Process(Camera);
-                    //if(con.c_timer) {
-                    //    cout<<"Processing "; //timer
-                    //    tester(2,t,0);
-                    //    cout<<"\n\n";
-                    //}
                 } else {
                     cout<<"CurrBuffer: "<<Camera->BufferIndex<<endl;
                     if(Camera->Frames[Camera->BufferIndex].Status != ePvErrSuccess) {
@@ -722,9 +701,6 @@ void Process(tCamera *Camera)
                                   Camera->FrameHeight * Camera->FrameWidth);
 
     //1. init stucts and variables
-    prog_c con;
-    init_prog_c(con);
-
     info im;
     memset(&im, 0, sizeof(info));
     params val;
@@ -746,9 +722,6 @@ void Process(tCamera *Camera)
     if(MODE_TIMING) cout << (is_pyc(Camera) ? "Pitch-yaw" : "Roll")
                          << " image ready in " << stopwatch(watch) << " us\n";
 
-    //if(con.c_timer)
-    //    tester(1,t,0);
-
     if(MODE_TIMING) stopwatch(watch);
     if(is_pyc(Camera)) {
         analyzePY(im, val, imarr);
@@ -768,10 +741,6 @@ void Process(tCamera *Camera)
             TRANSMIT_NEXT_R_IMAGE = false;
         }
     }
-    //if(con.c_timer) {
-    //    cout<<"Analysis ";
-    //    tester(2,t,0);
-    //}
     if(MODE_VERBOSE) {
         if(is_pyc(Camera)) {
             reportPY(val, im);
@@ -787,8 +756,6 @@ void Process(tCamera *Camera)
 
     //3. save?
     if(Camera->WantToSave) {
-        //if(con.c_timer)
-        //    tester(1,t,0);
         if((Camera->savecount % SAVE_1_OF_EVERY_N) == 0) {
             if(MODE_TIMING) stopwatch(watch);
             if(MODE_VERBOSE) cout << "Saving to " << filename << endl;
@@ -796,10 +763,6 @@ void Process(tCamera *Camera)
             if(MODE_TIMING) cout << "  Saving took " << stopwatch(watch) << " us\n";
         }
         Camera->savecount++;
-        //if(con.c_timer) {
-        //    cout<<"Saving ";
-        //    tester(2,t,0);
-        //}
      }
 }
 // __________________________________________________________________________________________end
