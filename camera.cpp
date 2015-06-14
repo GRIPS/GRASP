@@ -138,7 +138,7 @@ void set_cadence();
 void set_timer(int x);
 int next_camera();
 
-void tester(int x, timeval& t1, int i);
+unsigned int stopwatch(unsigned int &watch);
 
 void spawn_thread(int x);
 void *snap_thread(void *cam);
@@ -159,6 +159,7 @@ void CameraStop(tCamera *Camera);
 void RestartAcq(tCamera *Camera);
 void DisplayParameters();
 void FrameStats(tCamera *Camera);
+void tester(int x, timeval& t1, int i);
 // __________________________________________________________________________________________end
 
 
@@ -239,6 +240,22 @@ int camera_main()
 bool is_pyc(tCamera *Camera)
 {
     return Camera->UID == PY_CAM_ID;
+}
+// __________________________________________________________________________________________end
+
+
+/* =============================================================================================
+   Stopwatch function
+   You need to pass in the clock (rather than a static variable) so that it can be thread-safe
+   Returns the time elapsed in microseconds since the last time it was called
+   ========================================================================================== */
+unsigned int stopwatch(unsigned int &watch)
+{
+    unsigned int old_watch = watch;
+    timespec now;
+    clock_gettime(CLOCK_REALTIME, &now);
+    watch = now.tv_sec * 1000000 + now.tv_nsec / 1000;
+    return watch - old_watch;
 }
 // __________________________________________________________________________________________end
 
@@ -626,7 +643,7 @@ void *snap_thread(void *cam)
     //start snap only if we're done waiting for another frame to return (but doesn't protect frame buffer)
     if(Camera->Handle != NULL && !Camera->PauseCapture && !Camera->waitFlag) {
         //snap on time? output to screen
-        timeval t;
+        //timeval t;
         //tester(0, t, i);
 
         //requeue a frame & snap (if successful requeue) - then process (if no timeout & done waiting)
@@ -645,27 +662,27 @@ void *snap_thread(void *cam)
                 cout<<"Trigger Software Error: ";
                 PrintError(errCode);
             }
-            if(con.c_timer)
-                tester(1,t,0);
+            //if(con.c_timer)
+            //    tester(1,t,0);
             errCode = PvCaptureWaitForFrameDone(Camera->Handle,&(Camera->Frames[Camera->BufferIndex]),con.timeout1);
             handle_wait(Camera, errCode, con.timeout2); //checks and updates waitflag and errCode
-            if(con.c_timer) {
-                cout<<Camera->UID<<" ";
-                tester(2,t,0);
-            }
+            //if(con.c_timer) {
+            //    cout<<Camera->UID<<" ";
+            //    tester(2,t,0);
+            //}
 
             //Process: if done waiting, no timeout, successful frame & non-zero bitdepth
             //cout<<"image size: "<<Camera->Frames[Camera->BufferIndex].ImageSize<<endl;
             if(Camera->waitFlag== false && errCode == ePvErrSuccess) {
                 if( Camera->Frames[Camera->BufferIndex].Status == ePvErrSuccess && Camera->Frames[Camera->BufferIndex].BitDepth != 0) {
-                    if(con.c_timer)
-                        tester(1,t,0);
+                    //if(con.c_timer)
+                    //    tester(1,t,0);
                     Process(Camera);
-                    if(con.c_timer) {
-                        cout<<"Processing "; //timer
-                        tester(2,t,0);
-                        cout<<"\n\n";
-                    }
+                    //if(con.c_timer) {
+                    //    cout<<"Processing "; //timer
+                    //    tester(2,t,0);
+                    //    cout<<"\n\n";
+                    //}
                 } else {
                     cout<<"CurrBuffer: "<<Camera->BufferIndex<<endl;
                     if(Camera->Frames[Camera->BufferIndex].Status != ePvErrSuccess) {
@@ -748,6 +765,8 @@ void handle_timeout(tCamera *Camera)
   ========================================================================================== */
 void Process(tCamera *Camera)
 {
+    unsigned int watch;
+
     ++Camera->pcount;
     unsigned int localIndex = Camera->BufferIndex;
 
@@ -772,6 +791,7 @@ void Process(tCamera *Camera)
                 Camera->ClockOEB[localIndex]);
     }
 
+    if(MODE_TIMING) stopwatch(watch);
     // create copy of image buffer
     valarray<unsigned char> imarr((unsigned char*)Camera->Frames[localIndex].ImageBuffer,
                                   Camera->FrameHeight * Camera->FrameWidth);
@@ -787,7 +807,7 @@ void Process(tCamera *Camera)
     val.UID = Camera->UID;
     val.clock = Camera->ClockOEB[localIndex];
 
-    timeval t;
+    //timeval t;
     //2. analyze live or test image?
     if(MODE_MOCK) {
         if(is_pyc(Camera)) {
@@ -799,25 +819,33 @@ void Process(tCamera *Camera)
         }
     }
 
-    if(con.c_timer)
-        tester(1,t,0);
+    //if(con.c_timer)
+    //    tester(1,t,0);
+
+    if(MODE_TIMING) stopwatch(watch);
     if(is_pyc(Camera)) {
         analyzePY(im, val, imarr);
+    } else {
+        analyzeR(im, val, imarr);
+    }
+    if(MODE_TIMING) cout << (is_pyc(Camera) ? "Pitch-yaw" : "Roll")
+                         << " analysis took " << stopwatch(watch) << " us\n";
+
+    if(is_pyc(Camera)) {
         if(TRANSMIT_NEXT_PY_IMAGE) {
             transmit_image(val, im, imarr);
             TRANSMIT_NEXT_PY_IMAGE = false;
         }
     } else {
-        analyzeR(im, val, imarr);
         if(TRANSMIT_NEXT_R_IMAGE) {
             transmit_image(val, im, imarr);
             TRANSMIT_NEXT_R_IMAGE = false;
         }
     }
-    if(con.c_timer) {
-        cout<<"Analysis ";
-        tester(2,t,0);
-    }
+    //if(con.c_timer) {
+    //    cout<<"Analysis ";
+    //    tester(2,t,0);
+    //}
     if(MODE_VERBOSE) {
         if(is_pyc(Camera)) {
             reportPY(val, im);
@@ -833,17 +861,19 @@ void Process(tCamera *Camera)
 
     //3. save?
     if(Camera->WantToSave) {
-        if(con.c_timer)
-            tester(1,t,0);
+        //if(con.c_timer)
+        //    tester(1,t,0);
         if((Camera->savecount % SAVE_1_OF_EVERY_N) == 0) {
+            if(MODE_TIMING) stopwatch(watch);
             if(MODE_VERBOSE) cout << "Saving to " << filename << endl;
             saveim(Camera, imarr, filename);
+            if(MODE_TIMING) cout << "Saving took " << stopwatch(watch) << " us\n";
         }
         Camera->savecount++;
-        if(con.c_timer) {
-            cout<<"Saving ";
-            tester(2,t,0);
-        }
+        //if(con.c_timer) {
+        //    cout<<"Saving ";
+        //    tester(2,t,0);
+        //}
      }
 }
 // __________________________________________________________________________________________end

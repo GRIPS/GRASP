@@ -82,11 +82,14 @@ float grid_rotation_rate = -1;
 struct dmminfo DMM1;
 float temp_py = 0, temp_roll = 0, temp_mb = 0;
 
-bool MODE_MOCK = false;
-bool MODE_VERBOSE = false;
-bool MODE_TELEMETRY = false;
+// global mode variables
+bool MODE_MOCK = false; //used by camera main
+bool MODE_NETWORK = false;
+bool MODE_TIMING = false; //used by camera main
 bool MODE_UNCONNECTED = false;
+bool MODE_VERBOSE = false; //used by camera main
 
+// UDP packet queues
 TelemetryPacketQueue tm_packet_queue; //for sending
 CommandPacketQueue cm_packet_queue; //for receiving
 
@@ -226,7 +229,7 @@ void *TelemetrySenderThread(void *threadargs)
             TelemetryPacket tp(NULL);
             tm_packet_queue >> tp;
             telSender.send( &tp );
-            if(MODE_TELEMETRY) std::cout << "TelemetrySender:" << tp << std::endl;
+            if(MODE_NETWORK) std::cout << "TelemetrySender:" << tp << std::endl;
 /*
             if (LOG_PACKETS && log.is_open()) {
                 uint16_t length = tp.getLength();
@@ -696,24 +699,29 @@ int main(int argc, char *argv[])
                         std::cout << "Mock mode\n";
                         MODE_MOCK = true;
                         break;
-                    case 'v':
-                        std::cout << "Verbose mode\n";
-                        MODE_VERBOSE = true;
+                    case 'n':
+                        std::cout << "Network diagnostics mode\n";
+                        MODE_NETWORK = true;
                         break;
                     case 't':
-                        std::cout << "Telemetry mode\n";
-                        MODE_TELEMETRY = true;
+                        std::cout << "Timing mode\n";
+                        MODE_TIMING = true;
                         break;
                     case 'u':
                         std::cout << "Unconnected mode\n";
                         MODE_UNCONNECTED = true;
                         break;
+                    case 'v':
+                        std::cout << "Verbose mode\n";
+                        MODE_VERBOSE = true;
+                        break;
                     case '?':
                         std::cout << "Command-line options:\n";
                         std::cout << "-m  Use mock images instead of real images\n";
-                        std::cout << "-v  Verbose messages (mostly on the camera side)\n";
-                        std::cout << "-t  Display telemetry packets (can be crazy!)\n";
+                        std::cout << "-n  Display network packets (can be crazy!)\n";
+                        std::cout << "-t  Perform timing tests\n";
                         std::cout << "-u  Assume the A2D board and cameras are not connected\n";
+                        std::cout << "-v  Verbose messages (mostly on the camera side)\n";
                         return -1;
                     default:
                         std::cerr << "Unknown option, use -? to list options\n";
