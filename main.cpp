@@ -267,6 +267,8 @@ void *TelemetryHousekeepingThread(void *threadargs)
         TelemetryPacket tp(SYS_ID_ASP, TM_HOUSEKEEPING, tm_frame_sequence_number, oeb_get_clock());
 
         uint8_t status_bitfield = 0;
+        bitwrite(&status_bitfield, 0, 1, CAMERAS[0].Handle != NULL);
+        bitwrite(&status_bitfield, 1, 1, CAMERAS[1].Handle != NULL);
         tp << status_bitfield << latest_command_key;
 
         tp << (int16_t)(temp_py * 100) << (int16_t)(temp_roll * 100) << (int16_t)(temp_mb * 100);
@@ -434,19 +436,20 @@ void queue_cmd_proc_ack_tmpacket( uint8_t error_code, uint64_t response )
 
 void queue_settings_tmpacket()
 {
-    TelemetryPacket tp(SYS_ID_ASP, TM_SETTINGS, 0, oeb_get_clock());
+    static uint16_t counter = 0;
+    TelemetryPacket tp(SYS_ID_ASP, TM_SETTINGS, counter, oeb_get_clock());
 
     uint16_t last_parameter_table = 0;
     tp << last_parameter_table;
 
-    uint8_t py_fps = 5;
-    uint8_t py_gain = 1;
-    uint16_t py_exposure = 1000;
+    uint8_t py_fps = CAMERAS[0].Rate;
+    uint8_t py_gain = CAMERAS[0].Gain;
+    uint16_t py_exposure = CAMERAS[0].ExposureLength;
     tp << py_fps << py_gain << py_exposure;
 
-    uint8_t roll_fps = 5;
-    uint8_t roll_gain = 1;
-    uint16_t roll_exposure = 1000;
+    uint8_t roll_fps = CAMERAS[1].Rate;
+    uint8_t roll_gain = CAMERAS[1].Gain;
+    uint16_t roll_exposure = CAMERAS[1].ExposureLength;
     tp << roll_fps << roll_gain << roll_exposure;
 
     tm_packet_queue << tp;
