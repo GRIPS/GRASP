@@ -15,6 +15,8 @@ extern volatile uint8_t py_image_counter;
 extern volatile uint8_t roll_image_counter;
 extern float temp_py, temp_roll;
 
+extern bool MODE_MOCK, MODE_VERBOSE;
+
 int usleep_force(uint64_t microseconds);
 
 #endif

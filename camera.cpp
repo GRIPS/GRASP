@@ -593,7 +593,7 @@ void spawn_thread(int x)
         }
 
         //cout<<"Camera "<<Camera->UID<<" frame "<<Camera->idx<<endl;
-        cout << (is_pyc(Camera) ? "..\n" : "++\n");
+        if(MODE_VERBOSE) cout << (is_pyc(Camera) ? "..\n" : "++\n");
         //cout<<" \n"; //without this the transmission time is 50ms, wiht it its .05ms.. something is wrong
 
         //update thread and buffer indexes
@@ -789,7 +789,7 @@ void Process(tCamera *Camera)
 
     timeval t;
     //2. analyze live or test image?
-    if(!con.live) {
+    if(MODE_MOCK) {
         if(is_pyc(Camera)) {
             const char* filename1 = "mock_py.fits";        //sun is 330 pix
             readfits(filename1, imarr, val.width, val.height);
@@ -818,7 +818,7 @@ void Process(tCamera *Camera)
         cout<<"Analysis ";
         tester(2,t,0);
     }
-    if(con.diag) {
+    if(MODE_VERBOSE) {
         if(is_pyc(Camera)) {
             reportPY(val, im);
         } else {
@@ -836,6 +836,7 @@ void Process(tCamera *Camera)
         if(con.c_timer)
             tester(1,t,0);
         if((Camera->savecount % SAVE_1_OF_EVERY_N) == 0) {
+            if(MODE_VERBOSE) cout << "Saving to " << filename << endl;
             saveim(Camera, imarr, filename);
         }
         Camera->savecount++;

@@ -82,6 +82,11 @@ float grid_rotation_rate = -1;
 struct dmminfo DMM1;
 float temp_py = 0, temp_roll = 0, temp_mb = 0;
 
+bool MODE_MOCK = false;
+bool MODE_VERBOSE = false;
+bool MODE_TELEMETRY = false;
+bool MODE_UNCONNECTED = false;
+
 TelemetryPacketQueue tm_packet_queue; //for sending
 CommandPacketQueue cm_packet_queue; //for receiving
 
@@ -221,7 +226,7 @@ void *TelemetrySenderThread(void *threadargs)
             TelemetryPacket tp(NULL);
             tm_packet_queue >> tp;
             telSender.send( &tp );
-            //std::cout << "TelemetrySender:" << tp << std::endl;
+            if(MODE_TELEMETRY) std::cout << "TelemetrySender:" << tp << std::endl;
 /*
             if (LOG_PACKETS && log.is_open()) {
                 uint16_t length = tp.getLength();
@@ -672,17 +677,52 @@ void cmd_process_command(CommandPacket &cp)
 void start_all_workers()
 {
     start_thread(TelemetryHousekeepingThread, NULL);
-    start_thread(TelemetryA2DThread, NULL);
+    if (!MODE_UNCONNECTED) start_thread(TelemetryA2DThread, NULL);
     start_thread(TelemetryScienceThread, NULL);
     start_thread(TelemetrySenderThread, NULL);
     start_thread(IRSensorThread, NULL);
 
     g_running_camera_main = 1;
-    start_thread(CameraMainThread, NULL);
+    if (!MODE_UNCONNECTED) start_thread(CameraMainThread, NULL);
 }
 
-int main(void)
+int main(int argc, char *argv[])
 {
+    for(int i = 1; i < argc; i++) {
+        if(argv[i][0] == '-') {
+            for(int j = 1; argv[i][j] != 0; j++) {
+                switch(argv[i][j]) {
+                    case 'm':
+                        std::cout << "Mock mode\n";
+                        MODE_MOCK = true;
+                        break;
+                    case 'v':
+                        std::cout << "Verbose mode\n";
+                        MODE_VERBOSE = true;
+                        break;
+                    case 't':
+                        std::cout << "Telemetry mode\n";
+                        MODE_TELEMETRY = true;
+                        break;
+                    case 'u':
+                        std::cout << "Unconnected mode\n";
+                        MODE_UNCONNECTED = true;
+                        break;
+                    case '?':
+                        std::cout << "Command-line options:\n";
+                        std::cout << "-m  Use mock images instead of real images\n";
+                        std::cout << "-v  Verbose messages (mostly on the camera side)\n";
+                        std::cout << "-t  Display telemetry packets (can be crazy!)\n";
+                        std::cout << "-u  Assume the A2D board and cameras are not connected\n";
+                        return -1;
+                    default:
+                        std::cerr << "Unknown option, use -? to list options\n";
+                        return -1;
+                }
+            }
+        }
+    }
+
     // to catch a Ctrl-C or termination signal and clean up
     signal(SIGINT, &sig_handler);
     signal(SIGTERM, &sig_handler);

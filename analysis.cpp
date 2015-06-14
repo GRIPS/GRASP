@@ -357,7 +357,7 @@ void reportPY(params val, info im)
     cout<<"there: "<<im.there[0]<<" ,"<<im.there[1]<<" , "<<im.there[2]<<endl;
     //cout<<"wsun: "<<im.wsun[0]<<" ,"<<im.wsun[1]<<" , "<<im.wsun[2]<<endl;
     //cout<<"theta: "<<im.theta<<endl;
-    cout<<"\n\n";
+    cout<<"\n";
 }
 // __________________________________________________________________________________________end
 
