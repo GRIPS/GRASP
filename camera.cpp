@@ -28,8 +28,7 @@
 #include <arpa/inet.h>
 #include <pthread.h>
 
-#include "a_PY.h"
-#include "a_H.h"
+#include "analysis.hpp"
 #include "control.h"
 #include "main.hpp"
 #include "oeb.h"
