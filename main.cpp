@@ -519,8 +519,12 @@ void *CommandHandlerThread(void *threadargs)
                     error_code = arm_timer();
                     break;
                 case 0x5: //Set gain
+                    CAMERAS[0].Gain = *(uint8_t *)(my_data->payload);
+                    std::cout << "Setting pitch-yaw camera gain to " << CAMERAS[0].Gain << " dB\n";
                     break;
                 case 0x6: //Set exposure
+                    CAMERAS[0].ExposureLength = *(uint16_t *)(my_data->payload);
+                    std::cout << "Setting pitch-yaw camera exposure to " << CAMERAS[0].ExposureLength << " us\n";
                     break;
                 case 0xC: //Send latest image
                     TRANSMIT_NEXT_PY_IMAGE = true;
@@ -543,8 +547,12 @@ void *CommandHandlerThread(void *threadargs)
                     error_code = arm_timer();
                     break;
                 case 0x5: //Set gain
+                    CAMERAS[1].Gain = *(uint8_t *)(my_data->payload);
+                    std::cout << "Setting roll camera gain to " << CAMERAS[1].Gain << " dB\n";
                     break;
                 case 0x6: //Set exposure
+                    CAMERAS[1].ExposureLength = *(uint16_t *)(my_data->payload);
+                    std::cout << "Setting roll camera exposure to " << CAMERAS[1].ExposureLength << " us\n";
                     break;
                 case 0xC: //Send latest image
                     TRANSMIT_NEXT_R_IMAGE = true;

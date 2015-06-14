@@ -432,10 +432,8 @@ bool CameraStart(tCamera *Camera)
     else
         cout << "Possible Packet Size issue.\n";
 
-    // Determine how big the frame buffers should be and set the exposure value.
-    if(!PvAttrUint32Get(Camera->Handle, "TotalBytesPerFrame", &FrameSize)
-       && !PvAttrUint32Set(Camera->Handle, "ExposureValue", Camera->ExposureLength)
-       && !PvAttrUint32Set(Camera->Handle, "GainValue", Camera->Gain)) {
+    // Determine how big the frame buffers should be
+    if(!PvAttrUint32Get(Camera->Handle, "TotalBytesPerFrame", &FrameSize)) {
 
         // Calculate the frame dimensions from the frame size assuming 4:3 aspect ratio
         Camera->FrameHeight = (unsigned int)fabs(sqrt(.75 * FrameSize));
@@ -559,14 +557,16 @@ void *snap_thread(void *cam)
     prog_c con;
     init_prog_c(con);
 
-    //housekeeping
-    getTemp(Camera);
-
     //start snap only if we're done waiting for another frame to return (but doesn't protect frame buffer)
     if(Camera->Handle != NULL && !Camera->PauseCapture && !Camera->waitFlag) {
         //snap on time? output to screen
         //timeval t;
         //tester(0, t, i);
+
+        //set the exposure length and gain
+        //TODO: check for failure?
+        PvAttrUint32Set(Camera->Handle, "ExposureValue", Camera->ExposureLength);
+        PvAttrUint32Set(Camera->Handle, "GainValue", Camera->Gain);
 
         //requeue a frame & snap (if successful requeue) - then process (if no timeout & done waiting)
         Camera->queueStatus = PvCaptureQueueFrame(Camera->Handle,&(Camera->Frames[Camera->BufferIndex]),NULL);
@@ -623,6 +623,9 @@ void *snap_thread(void *cam)
             cout<<"PvCaptureQueueFrame err\n";
             queueErrorHandling(Camera);
         }//requeueframe
+
+        //housekeeping
+        getTemp(Camera);
     } else { //handle&&pausecap&&flag
         cout<<Camera->UID<<" handle, pausecap or flag error\n";
     }
