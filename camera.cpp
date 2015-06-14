@@ -818,6 +818,8 @@ void Process(tCamera *Camera)
             readfits(filename1, imarr, val.width, val.height);
         }
     }
+    if(MODE_TIMING) cout << (is_pyc(Camera) ? "Pitch-yaw" : "Roll")
+                         << " image ready in " << stopwatch(watch) << " us\n";
 
     //if(con.c_timer)
     //    tester(1,t,0);
@@ -828,8 +830,7 @@ void Process(tCamera *Camera)
     } else {
         analyzeR(im, val, imarr);
     }
-    if(MODE_TIMING) cout << (is_pyc(Camera) ? "Pitch-yaw" : "Roll")
-                         << " analysis took " << stopwatch(watch) << " us\n";
+    if(MODE_TIMING) cout << "  Analysis took " << stopwatch(watch) << " us\n";
 
     if(is_pyc(Camera)) {
         if(TRANSMIT_NEXT_PY_IMAGE) {
@@ -867,7 +868,7 @@ void Process(tCamera *Camera)
             if(MODE_TIMING) stopwatch(watch);
             if(MODE_VERBOSE) cout << "Saving to " << filename << endl;
             saveim(Camera, imarr, filename);
-            if(MODE_TIMING) cout << "Saving took " << stopwatch(watch) << " us\n";
+            if(MODE_TIMING) cout << "  Saving took " << stopwatch(watch) << " us\n";
         }
         Camera->savecount++;
         //if(con.c_timer) {
@@ -930,6 +931,8 @@ bool saveim(tCamera *Camera, valarray<unsigned char> &imarr, const char* filenam
             std::cout<<"Couldn't create FITS file. The file might already exist. \n";
             return false;
         }
+
+        if(MODE_COMPRESS) pFits->setCompressionType(RICE_1);
 
         //append keys to the primary header
         //long exposure(1500);

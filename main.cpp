@@ -83,6 +83,7 @@ struct dmminfo DMM1;
 float temp_py = 0, temp_roll = 0, temp_mb = 0;
 
 // global mode variables
+bool MODE_COMPRESS = false; //used by camera main
 bool MODE_MOCK = false; //used by camera main
 bool MODE_NETWORK = false;
 bool MODE_TIMING = false; //used by camera main
@@ -695,6 +696,10 @@ int main(int argc, char *argv[])
         if(argv[i][0] == '-') {
             for(int j = 1; argv[i][j] != 0; j++) {
                 switch(argv[i][j]) {
+                    case 'c':
+                        std::cout << "Compress mode\n";
+                        MODE_COMPRESS = true;
+                        break;
                     case 'm':
                         std::cout << "Mock mode\n";
                         MODE_MOCK = true;
@@ -717,6 +722,7 @@ int main(int argc, char *argv[])
                         break;
                     case '?':
                         std::cout << "Command-line options:\n";
+                        std::cout << "-c  Use Rice compression when saving FITS files\n";
                         std::cout << "-m  Use mock images instead of real images\n";
                         std::cout << "-n  Display network packets (can be crazy!)\n";
                         std::cout << "-t  Perform timing tests\n";
