@@ -65,15 +65,16 @@ struct tCamera
     unsigned long    UID;
     unsigned long    ExposureLength;
     unsigned long    Gain;
-    uint64_t         Clock; //from the odds & ends board
+
+    timespec         ClockPC[FRAMESCOUNT];
+    uint64_t         ClockOEB[FRAMESCOUNT]; //from the odds & ends board
 
     tPvFrame         Frames[FRAMESCOUNT];
     //valarray<unsigned char> imarr[FRAMESCOUNT]; //each valarray is sized 0, resized in setup
     //auto_ptr<CCfits::FITS> pFits[FRAMESCOUNT]; //vector of pointers
-    char             TimeStamps[FRAMESCOUNT][23];
     volatile bool    NewFlags[FRAMESCOUNT];
     unsigned int     Cadence;
-    unsigned int     BufferIndex; //FIXME: not thread-safe
+    unsigned int     BufferIndex; //FIXME: not thread-safe!
     unsigned int     FrameHeight;
     unsigned int     FrameWidth;
     volatile bool    PauseCapture;
@@ -132,7 +133,6 @@ bool getTemp(tCamera *Camera);
 void CameraUnsetup(tCamera *Camera);
 
 bool is_pyc(tCamera *Camera);
-void timestamp(tCamera *Camera);
 
 void set_cadence();
 void set_timer(int x);
@@ -149,7 +149,8 @@ void queueErrorHandling(tCamera *Camera);
 
 void Process(tCamera *Camera);
 bool saveim(tCamera *Camera, valarray<unsigned char> &imarr, const char* filename);
-void transmit_image(tCamera *Camera, valarray<unsigned char> &imarr);
+
+void transmit_image(params &val, info &im, valarray<unsigned char> &imarr);
 
 int readfits(const char* filename, valarray<unsigned char>& contents, unsigned int &width, unsigned int &height);
 
@@ -554,28 +555,6 @@ void CameraStop(tCamera *Camera)
 // _________________________________________________________________________________________end
 
 
-/* =============================================================================================
-   timestamp an image
-   ========================================================================================== */
-void timestamp(tCamera *Camera)
-{
-    ostringstream os;
-    ostringstream imageIndex;
-    time_t rawtime;
-    timeval highrestime;
-    struct tm * timeinfo;
-    char filename[17];
-    time(&rawtime);
-    timeinfo = localtime(&rawtime);
-    strftime (filename, 17, "%Y%m%d_%H%M%S_", timeinfo);
-    gettimeofday(&highrestime, NULL);
-    imageIndex << highrestime.tv_usec;
-    os << filename << imageIndex.str();
-    strcpy(Camera->TimeStamps[Camera->BufferIndex], os.str().c_str());
-}
-// _________________________________________________________________________________________end
-
-
 /*=============================================================================================
   Determines which camera to snap next
   Currently assumes two cameras and alternates between them until one camera is "done"
@@ -659,7 +638,7 @@ void *snap_thread(void *cam)
             Camera->frameandqueueFlag = false;
 
             //trigger, wait and queue processing if successful
-            timestamp(Camera);
+            clock_gettime(CLOCK_REALTIME, &Camera->ClockPC[Camera->BufferIndex]);
             Camera->snapcount++;
             Camera->waitFlag= true;
             if(PvCommandRun(Camera->Handle, "FrameStartTriggerSoftware") != ePvErrSuccess) {
@@ -770,16 +749,32 @@ void handle_timeout(tCamera *Camera)
 void Process(tCamera *Camera)
 {
     ++Camera->pcount;
+    unsigned int localIndex = Camera->BufferIndex;
+
     if(is_pyc(Camera)) {
-        Camera->Clock = oeb_get_pyc();
+        Camera->ClockOEB[localIndex] = oeb_get_pyc();
         py_image_counter++;
     } else {
-        Camera->Clock = oeb_get_rc();
+        Camera->ClockOEB[localIndex] = oeb_get_rc();
         roll_image_counter++;
     }
 
+    char filename[128];
+    if(Camera->WantToSave) {
+        char timestamp[14];
+        struct tm *capturetime;
+        capturetime = localtime(&Camera->ClockPC[localIndex].tv_sec);
+        strftime(timestamp, 14, "%y%m%d_%H%M%S", capturetime);
+        sprintf(filename, "%s/%s_%s_%06ld_%012lx.fits",
+                "images", //FIXME: flat storage will become unwieldy!
+                (is_pyc(Camera) ? "py" : "r"), timestamp,
+                Camera->ClockPC[localIndex].tv_nsec/1000l,
+                Camera->ClockOEB[localIndex]);
+    }
+
     // create copy of image buffer
-    valarray<unsigned char> imarr((unsigned char*)Camera->Frames[Camera->BufferIndex].ImageBuffer, Camera->FrameHeight*Camera->FrameWidth);
+    valarray<unsigned char> imarr((unsigned char*)Camera->Frames[localIndex].ImageBuffer,
+                                  Camera->FrameHeight * Camera->FrameWidth);
 
     //1. init stucts and variables
     prog_c con;
@@ -789,6 +784,8 @@ void Process(tCamera *Camera)
     memset(&im, 0, sizeof(info));
     params val;
     init_params(val, Camera->FrameWidth, Camera->FrameHeight);
+    val.UID = Camera->UID;
+    val.clock = Camera->ClockOEB[localIndex];
 
     timeval t;
     //2. analyze live or test image?
@@ -807,13 +804,13 @@ void Process(tCamera *Camera)
     if(is_pyc(Camera)) {
         analyzePY(im, val, imarr);
         if(TRANSMIT_NEXT_PY_IMAGE) {
-            transmit_image(Camera, imarr);
+            transmit_image(val, im, imarr);
             TRANSMIT_NEXT_PY_IMAGE = false;
         }
     } else {
         analyzeR(im, val, imarr);
         if(TRANSMIT_NEXT_R_IMAGE) {
-            transmit_image(Camera, imarr);
+            transmit_image(val, im, imarr);
             TRANSMIT_NEXT_R_IMAGE = false;
         }
     }
@@ -836,21 +833,16 @@ void Process(tCamera *Camera)
 
     //3. save?
     if(Camera->WantToSave) {
-        //create filename
-        ostringstream filename;
-        filename << "images/" << (is_pyc(Camera) ? "py_" : "r_") << Camera->TimeStamps[Camera->BufferIndex]<<"_"<< Camera->savecount<<".fits";
-        //filename << "images/" << Camera->UID << "_" << Camera->BufferIndex<<".fits"; //circular filename buffer
         if(con.c_timer)
             tester(1,t,0);
         if((Camera->savecount % SAVE_1_OF_EVERY_N) == 0) {
-            saveim(Camera, imarr, filename.str().c_str());
+            saveim(Camera, imarr, filename);
         }
         Camera->savecount++;
         if(con.c_timer) {
             cout<<"Saving ";
             tester(2,t,0);
         }
-        filename.seekp(0);
      }
 }
 // __________________________________________________________________________________________end
@@ -859,18 +851,18 @@ void Process(tCamera *Camera)
 /*=============================================================================================
   Transmit a whole image
   ========================================================================================== */
-void transmit_image(tCamera *Camera, valarray<unsigned char> &imarr)
+void transmit_image(params &val, info &im, valarray<unsigned char> &imarr)
 {
-    cout << "Transmitting image from camera " << Camera->UID << endl;
+    int id = (val.UID == PY_CAM_ID ? 0 : 1);
+    cout << "Transmitting image from " << (id == 0 ? "pitch-yaw" : "roll") << " camera\n";
 
     ImagePacketQueue ipq;
 
-    ipq.add_partial_array(is_pyc(Camera) ? 0 : 1, Camera->FrameHeight, Camera->FrameWidth,
-                          0, Camera->FrameHeight, 0, Camera->FrameWidth / 2, (uint8_t *)&(imarr[0]),
-                          Camera->Clock, false);
-    ipq.add_partial_array(is_pyc(Camera) ? 0 : 1, Camera->FrameHeight, Camera->FrameWidth,
-                          0, Camera->FrameHeight, 0, Camera->FrameWidth / 2, (uint8_t *)&(imarr[0]),
-                          Camera->Clock, true);
+    // Sent in two halves so that each individual packet is not too large
+    ipq.add_partial_array(id, val.height, val.width, 0, val.height, 0, val.width / 2,
+                          (uint8_t *)&(imarr[0]), val.clock, false);
+    ipq.add_partial_array(id, val.height, val.width, 0, val.height, val.width / 2, val.width,
+                          (uint8_t *)&(imarr[0]), val.clock, true);
 
     ImagePacket ip(NULL);
     cout << ipq.size() << " image packets to add to queue\n";
@@ -1063,7 +1055,7 @@ int readfits(const char* filename, valarray<unsigned char>& contents, unsigned i
     ExtHDU& image = pInfile->extension("Raw Frame");
 
     // read all user-specifed, coordinate, and checksum keys in the image
-    image.readAllKeys();
+    //image.readAllKeys();
     image.read(contents);
 
     //axes

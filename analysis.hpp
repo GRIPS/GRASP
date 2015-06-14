@@ -34,6 +34,8 @@ struct params        //parameters control the program and define variables
 {
     unsigned int width;
     unsigned int height;
+    unsigned long UID;
+    unsigned long clock;
 
     //analysis control
     int Rs;                                                //pixel radius of the sun
