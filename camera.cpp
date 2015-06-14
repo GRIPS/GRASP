@@ -116,6 +116,7 @@ volatile unsigned int CURRENT_TICK = 0;
 bool PAUSEPROGRAM = false;
 volatile bool TRANSMIT_NEXT_PY_IMAGE = false, TRANSMIT_NEXT_R_IMAGE = false;
 tCamera CAMERAS[MAXNUMOFCAMERAS];
+timer_t TIMER; //timer identifier
 // __________________________________________________________________________________________end
 
 
@@ -134,8 +135,9 @@ void CameraUnsetup(tCamera *Camera);
 
 bool is_pyc(tCamera *Camera);
 
-void set_cadence();
-void set_timer(int x);
+int create_timer();
+int arm_timer();
+int disarm_timer();
 int next_camera();
 
 unsigned int stopwatch(unsigned int &watch);
@@ -199,11 +201,13 @@ int camera_main()
                     if(!startSuccess) {
                         printf("Failed to start streaming from cameras.\n");
                     } else {
-                        set_cadence();
+                        create_timer();
+                        arm_timer();
                         while(g_running_camera_main) {
                             //Wait for interrputs which generate triggers to snap and process images
                             usleep_force(5000);
                         }
+                        disarm_timer();
                     }
 
                     // Unsetup the cameras.
@@ -412,32 +416,9 @@ bool CameraSetup(tCamera *Camera)
 
 
 /* =============================================================================================
-   Sets cadence and initiates alarm
+   Create the interrupt timer for snap
    ========================================================================================== */
-void set_cadence()
-{
-    bool tempBool = PAUSEPROGRAM;
-    PAUSEPROGRAM = true;
-
-    for(unsigned int i = 0; i < NUMOFCAMERAS; i++) {
-        TICKS_PER_SECOND += CAMERAS[i].Cadence;
-    }
-
-    //print TICKS_PER_SECOND
-    cout<<"This is the ticks per second: "<<TICKS_PER_SECOND<<"\n";
-    set_timer(0);     //create and arm the interrupt timer
-
-    PAUSEPROGRAM = tempBool;
-}
-// __________________________________________________________________________________________end
-
-
-/*============================================================================================
- Handles timers for the camera SNAP
- timer(0); create timer
- timer(1); disable timer //FIXME: I don't think this is implemented correctly
-==============================================================================================*/
-void set_timer(int x)
+int create_timer()
 {
     //set the sigevent notification structure
     struct sigevent timersigevent; //create signal event
@@ -447,49 +428,46 @@ void set_timer(int x)
     timersigevent._sigev_un._tid = syscall(SYS_gettid); //notify the thread that creates the timer. This will be the main thread.
 
     //create the timer
-    timer_t timer1; //timer identifier
-    if(timer_create(CLOCK_REALTIME, &timersigevent, &timer1) == 0) {
-        printf("timer created correctly\n");
+    return timer_create(CLOCK_REALTIME, &timersigevent, &TIMER) == 0;
+}
+// __________________________________________________________________________________________end
+
+
+/* =============================================================================================
+   Arm the interrupt timer for snap after determining the rate of ticks
+   ========================================================================================== */
+int arm_timer()
+{
+    for(unsigned int i = 0; i < NUMOFCAMERAS; i++) {
+        TICKS_PER_SECOND += CAMERAS[i].Cadence;
+    }
+    cout << "This is the ticks per second: " << TICKS_PER_SECOND << "\n";
+
+    struct itimerspec cadence;
+    memset(&cadence, 0, sizeof(struct itimerspec));
+    if (TICKS_PER_SECOND > 1) {
+        //time until first tick
+        cadence.it_value.tv_nsec = 1000000000 / TICKS_PER_SECOND;
+        //time between ticks
+        cadence.it_interval.tv_nsec = 1000000000 / TICKS_PER_SECOND;
     } else {
-        printf("timer not created \n");
+        cadence.it_value.tv_sec = 1;
+        cadence.it_interval.tv_sec = 1;
     }
 
-    //sleep to allow dd to register the handler before arming timer
-    //struct timespec tim, tim2;
-    //tim.tv_sec=0;
-    //tim.tv_nsec=100;
-    //nanosleep(&tim, &tim2);
+    return timer_settime(TIMER, 0, &cadence, NULL);
+}
+// __________________________________________________________________________________________end
 
-    if(x == 0) {
-        //Set timer values
-        struct itimerspec cadence;
-        memset(&cadence, 0, sizeof cadence);
-        if (TICKS_PER_SECOND != 1) {
-            cadence.it_value.tv_sec= 0;         //value is time from set until first tick
-            cadence.it_value.tv_nsec =  1000000000/ TICKS_PER_SECOND;
-            cadence.it_interval.tv_sec=0;         //interval resets the timer to this value
-            cadence.it_interval.tv_nsec= 1000000000/ TICKS_PER_SECOND;
-        } else {
-            cadence.it_value.tv_sec= 1;
-            cadence.it_value.tv_nsec =  0;
-            cadence.it_interval.tv_sec= 1;
-            cadence.it_interval.tv_nsec= 0;
-        }
 
-        //arm the timer
-        if(timer_settime(timer1, 0, &cadence, NULL) == 0) {
-            printf("timer armed correctly\n");
-        } else {
-            printf("timer not armed.\n");
-        }
-    } else if(x == 1) {
-        //disable the timer
-        struct itimerspec pause;
-        memset(&pause, 0, sizeof pause);
-        if(timer_settime(timer1, 0, &pause, NULL) == 0)
-            printf("SNAP timer disabled.\n");
-    }
-    cout<<"\n";
+/* =============================================================================================
+   Disarm the interrupt timer for snap
+   ========================================================================================== */
+int disarm_timer()
+{
+    struct itimerspec zero;
+    memset(&zero, 0, sizeof(struct itimerspec));
+    return timer_settime(TIMER, 0, &zero, NULL);
 }
 // __________________________________________________________________________________________end
 
