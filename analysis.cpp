@@ -33,8 +33,7 @@ bool init_params(params& val, unsigned int w_in, unsigned int h_in)
 
     //change these to load from parameter table
     val.Rs= 100;
-    //val.ns = 3;                                         //number of suns to find, finds the brightest --> dimmest
-    val.ns = 1;
+    val.ns = 3;                                         //number of suns to find, finds the brightest --> dimmest
     val.min = 50;                                         //min number of pixels for a sun to "be there"
     val.reject = 100;
     val.th[0] = .6;
@@ -87,7 +86,7 @@ bool analyzePY(info& im, params val, valarray<unsigned char> &imarr)
    This is probably more robust, but slower than Method 2
    ========================================================================================== */
 
-bool Find_3_mask(valarray<unsigned char> &imarr, params& val, info& im)
+bool Find_3_mask(valarray<unsigned char> imarr, params& val, info& im)
 {
     //get thresholds
     timeval t;

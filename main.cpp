@@ -100,6 +100,7 @@ pthread_t threads[MAX_THREADS];
 bool started[MAX_THREADS];
 int tid_listen = -1; //Stores the ID for the CommandListener thread
 pthread_mutex_t mutexStartThread; //Keeps new threads from being started simultaneously
+pthread_mutex_t mutexAnalysis; //For copying results from image analysis
 
 struct Thread_data{
     int thread_id;
@@ -326,7 +327,12 @@ void *TelemetryScienceThread(void *threadargs)
 
         TelemetryPacket tp(SYS_ID_ASP, TM_SCIENCE, tm_frame_sequence_number, oeb_get_clock());
 
+        pthread_mutex_lock(&mutexAnalysis);
+
         uint8_t quality_bitfield = 0;
+        bitwrite(&quality_bitfield, 0, 1, PY_ANALYSIS.there[0]);
+        bitwrite(&quality_bitfield, 1, 1, PY_ANALYSIS.there[1]);
+        bitwrite(&quality_bitfield, 2, 1, PY_ANALYSIS.there[2]);
         tp << quality_bitfield;
 
         uint8_t count1 = py_image_counter;
@@ -358,11 +364,9 @@ void *TelemetryScienceThread(void *threadargs)
         memset(roll_histo, 0, 16);
         tp.append_bytes(roll_histo, 16);
 
-        uint16_t sun_center_x[3], sun_center_y[3];
-        memset(sun_center_x, 0, 3 * sizeof(uint16_t));
-        memset(sun_center_y, 0, 3 * sizeof(uint16_t));
+        //the three Sun centers in pixel coordinates
         for (int i = 0; i < 3; i++) {
-            tp << (uint16_t)(sun_center_x[i] * 10) << (uint16_t)(sun_center_y[i] * 10);
+            tp << (uint16_t)(PY_ANALYSIS.xp[i] * 10) << (uint16_t)(PY_ANALYSIS.yp[i] * 10);
         }
 
         uint16_t fiducial_x[4], fiducial_y[4];
@@ -371,6 +375,8 @@ void *TelemetryScienceThread(void *threadargs)
         for (int i = 0; i < 4; i++) {
             tp << (uint16_t)(fiducial_x[i] * 10) << (uint16_t)(fiducial_y[i] * 10);
         }
+
+        pthread_mutex_unlock(&mutexAnalysis);
 
         tm_packet_queue << tp;
     }
@@ -769,6 +775,7 @@ int main(int argc, char *argv[])
     if(oeb_init() != 0) return 1;
 
     pthread_mutex_init(&mutexStartThread, NULL);
+    pthread_mutex_init(&mutexAnalysis, NULL);
 
     /* Create worker threads */
     printf("In main: creating threads\n");
@@ -804,6 +811,7 @@ int main(int argc, char *argv[])
     /* wait for threads to finish */
     kill_all_threads();
     pthread_mutex_destroy(&mutexStartThread);
+    pthread_mutex_destroy(&mutexAnalysis);
 
     oeb_uninit();
 

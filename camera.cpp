@@ -62,6 +62,7 @@ bool PAUSEPROGRAM = false;
 volatile bool TRANSMIT_NEXT_PY_IMAGE = false, TRANSMIT_NEXT_R_IMAGE = false;
 tCamera CAMERAS[MAXNUMOFCAMERAS];
 timer_t TIMER; //timer identifier
+struct info PY_ANALYSIS, R_ANALYSIS;
 // __________________________________________________________________________________________end
 
 
@@ -121,6 +122,9 @@ int camera_main()
     memset(&act, 0, sizeof(struct sigaction));
     act.sa_handler = spawn_thread;
     sigaction(10, &act, &oldact);
+
+    memset(&PY_ANALYSIS, 0, sizeof(struct info));
+    memset(&R_ANALYSIS, 0, sizeof(struct info));
 
     // Initialize the API.
     if(!PvInitialize()) {
@@ -669,12 +673,13 @@ void handle_timeout(tCamera *Camera)
   ========================================================================================== */
 void Process(tCamera *Camera)
 {
+    bool py = is_pyc(Camera);
     unsigned int watch;
 
     ++Camera->pcount;
     unsigned int localIndex = Camera->BufferIndex;
 
-    if(is_pyc(Camera)) {
+    if(py) {
         Camera->ClockOEB[localIndex] = oeb_get_pyc();
         py_image_counter++;
     } else {
@@ -690,7 +695,7 @@ void Process(tCamera *Camera)
         strftime(timestamp, 14, "%y%m%d_%H%M%S", capturetime);
         sprintf(filename, "%s/%s_%s_%06ld_%012lx.fits",
                 "images", //FIXME: flat storage will become unwieldy!
-                (is_pyc(Camera) ? "py" : "r"), timestamp,
+                (py ? "py" : "r"), timestamp,
                 Camera->ClockPC[localIndex].tv_nsec/1000l,
                 Camera->ClockOEB[localIndex]);
     }
@@ -711,7 +716,7 @@ void Process(tCamera *Camera)
     //timeval t;
     //2. analyze live or test image?
     if(MODE_MOCK) {
-        if(is_pyc(Camera)) {
+        if(py) {
             const char* filename1 = "mock_py.fits";        //sun is 330 pix
             readfits(filename1, imarr, val.width, val.height);
         } else {
@@ -719,18 +724,18 @@ void Process(tCamera *Camera)
             readfits(filename1, imarr, val.width, val.height);
         }
     }
-    if(MODE_TIMING) cout << (is_pyc(Camera) ? "Pitch-yaw" : "Roll")
+    if(MODE_TIMING) cout << (py ? "Pitch-yaw" : "Roll")
                          << " image ready in " << stopwatch(watch) << " us\n";
 
     if(MODE_TIMING) stopwatch(watch);
-    if(is_pyc(Camera)) {
+    if(py) {
         analyzePY(im, val, imarr);
     } else {
         analyzeR(im, val, imarr);
     }
     if(MODE_TIMING) cout << "  Analysis took " << stopwatch(watch) << " us\n";
 
-    if(is_pyc(Camera)) {
+    if(py) {
         if(TRANSMIT_NEXT_PY_IMAGE) {
             transmit_image(val, im, imarr);
             TRANSMIT_NEXT_PY_IMAGE = false;
@@ -742,15 +747,23 @@ void Process(tCamera *Camera)
         }
     }
     if(MODE_VERBOSE) {
-        if(is_pyc(Camera)) {
+        if(py) {
             reportPY(val, im);
         } else {
             reportR(val, im);
         }
     }
 
+    pthread_mutex_lock(&mutexAnalysis);
+    if(py) {
+        memcpy(&PY_ANALYSIS, &im, sizeof(info));
+    } else {
+        memcpy(&R_ANALYSIS, &im, sizeof(info));
+    }
+    pthread_mutex_unlock(&mutexAnalysis);
+
     //drawline at centers? This will be saved in the image below
-    if(is_pyc(Camera) && val.drawline) {
+    if(py && val.drawline) {
         drawline(imarr, val, im);
     }
 

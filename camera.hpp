@@ -9,6 +9,8 @@
 
 #include <PvApi.h>
 
+#include "analysis.hpp"
+
 int camera_main();
 int arm_timer();
 int disarm_timer();
@@ -71,5 +73,6 @@ struct tCamera
 //global variables found in camera.cpp
 extern volatile bool TRANSMIT_NEXT_PY_IMAGE, TRANSMIT_NEXT_R_IMAGE;
 extern tCamera CAMERAS[MAXNUMOFCAMERAS];
+extern struct info PY_ANALYSIS, R_ANALYSIS;
 
 #endif

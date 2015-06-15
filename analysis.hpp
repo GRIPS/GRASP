@@ -64,7 +64,7 @@ struct params        //parameters control the program and define variables
 bool init_params(params& val, unsigned int w_in, unsigned int h_in);
 
 bool analyzePY(info &im, params val, valarray<unsigned char> &imarr);
-bool Find_3_mask(valarray<unsigned char> &imarr, params& val, info& im);
+bool Find_3_mask(valarray<unsigned char> imarr, params& val, info& im);
 bool find_thresh(valarray<unsigned char> &imarr, unsigned char thresh[], params val);
 bool crop(valarray<unsigned char>& imarr, const char* fn,float x, float y, params val);
 void centroid(valarray<unsigned short>& mask, params val, float& xloc, float& yloc, bool& there);

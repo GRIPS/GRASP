@@ -14,6 +14,7 @@ extern TelemetryPacketQueue tm_packet_queue;
 extern volatile uint8_t py_image_counter;
 extern volatile uint8_t roll_image_counter;
 extern float temp_py, temp_roll;
+extern pthread_mutex_t mutexAnalysis;
 
 extern bool MODE_COMPRESS, MODE_MOCK, MODE_TIMING, MODE_VERBOSE;
 
