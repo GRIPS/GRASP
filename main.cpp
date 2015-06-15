@@ -174,6 +174,20 @@ int usleep_force(uint64_t microseconds)
     return 0;
 }
 
+void make_histo(uint8_t histo[], float histogram[])
+{
+    for(int i = 0; i < 16; i++) {
+        float total1 = 0, total2 = 0;
+        for(int j = 0; j < 8; j++) {
+            total1 += histogram[i * 16 + j];
+            total2 += histogram[i * 16 + j + 8];
+        }
+        uint8_t first = (total1 > 0 ? 2 * log10(total1) + 13.2 : 0);
+        uint8_t second = (total2 > 0 ? 2 * log10(total2) + 13.2 : 0);
+        histo[i] = (second << 4) + first;
+    }
+}
+
 void kill_all_workers()
 {
     for(int i = 0; i < MAX_THREADS; i++ ){
@@ -357,11 +371,11 @@ void *TelemetryScienceThread(void *threadargs)
         tp << grid_rotation_rate;
 
         uint8_t py_histo[16];
-        memset(py_histo, 0, 16);
+        make_histo(py_histo, PY_ANALYSIS.histogram);
         tp.append_bytes(py_histo, 16);
 
         uint8_t roll_histo[16];
-        memset(roll_histo, 0, 16);
+        make_histo(roll_histo, R_ANALYSIS.histogram);
         tp.append_bytes(roll_histo, 16);
 
         //the three Sun centers in pixel coordinates
