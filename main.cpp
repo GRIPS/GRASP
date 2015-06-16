@@ -4,14 +4,10 @@
 #define SAVE_LOCATION "./"
 
 //Sleep settings (microseconds)
-#define USLEEP_KILL            3000000 // waits when killing all threads
-#define USLEEP_CMD_SEND           5000 // period for popping off the command queue
-#define USLEEP_TM_SEND           50000 // period for popping off the telemetry queue
-#define USLEEP_TM_HOUSEKEEPING 1000000 // period for adding housekeeping telemetry packets to queue
-#define USLEEP_TM_A2D          1000000 // period for adding A2D telemetry packets to queue
-#define USLEEP_TM_SCIENCE      1000000 // period for adding science telemetry packets to queue
+#define USLEEP_KILL            3000000 // how long to wait before terminating threads
+#define USLEEP_TM_SEND            5000 // period for popping off the telemetry queue
 #define USLEEP_UDP_LISTEN         1000 // safety measure in case UDP listening is changed to non-blocking
-#define USLEEP_MAIN               5000 // period for checking for new commands
+#define USLEEP_MAIN               5000 // period for checking for new commands in the queue
 #define USLEEP_IRS              100000 // cadence for checking IR sensor
 
 //IP addresses
@@ -81,6 +77,7 @@ volatile uint8_t roll_image_counter = 0;
 float grid_rotation_rate = -1;
 struct dmminfo DMM1;
 float temp_py = 0, temp_roll = 0, temp_mb = 0;
+uint8_t cadence_housekeeping = 1, cadence_a2d = 1, cadence_science = 1; //seconds
 
 // global mode variables
 bool MODE_COMPRESS = false; //used by camera main
@@ -276,7 +273,7 @@ void *TelemetryHousekeepingThread(void *threadargs)
 
     while(!stop_message[tid])
     {
-        usleep_force(USLEEP_TM_HOUSEKEEPING);
+        usleep_force(cadence_housekeeping * 1000000);
         tm_frame_sequence_number++;
 
         TelemetryPacket tp(SYS_ID_ASP, TM_HOUSEKEEPING, tm_frame_sequence_number, oeb_get_clock());
@@ -307,7 +304,7 @@ void *TelemetryA2DThread(void *threadargs)
 
     while(!stop_message[tid])
     {
-        usleep_force(USLEEP_TM_A2D);
+        usleep_force(cadence_a2d * 1000000);
 
         DMMUpdateADC(&DMM1);
 
@@ -336,7 +333,7 @@ void *TelemetryScienceThread(void *threadargs)
 
     while(!stop_message[tid])
     {
-        usleep_force(USLEEP_TM_SCIENCE);
+        usleep_force(cadence_science * 1000000);
         tm_frame_sequence_number++;
 
         TelemetryPacket tp(SYS_ID_ASP, TM_SCIENCE, tm_frame_sequence_number, oeb_get_clock());
@@ -512,21 +509,26 @@ void *CommandHandlerThread(void *threadargs)
                     error_code = 0;
                     break;
                 case 0xD1: //Set cadence of housekeeping packet
+                    cadence_housekeeping = *(uint8_t *)(my_data->payload);
+                    std::cout << "Setting cadence of housekeeping packet to " << cadence_housekeeping << " s\n";
+                    error_code = 0;
                     break;
                 case 0xD2: //Set cadence of A2D temperatures packet
+                    cadence_a2d = *(uint8_t *)(my_data->payload);
+                    std::cout << "Setting cadence of A2D packet to " << cadence_a2d << " s\n";
+                    error_code = 0;
                     break;
                 case 0xD3: //Set cadence of science packet
+                    cadence_science = *(uint8_t *)(my_data->payload);
+                    std::cout << "Setting cadence of science packet to " << cadence_science << " s\n";
+                    error_code = 0;
                     break;
                 case 0xE0: //Load parameter table
                     break;
                 case 0xF0: //Restart worker threads, handled earlier
-                    break;
                 case 0xF1: //Restart all threads, handled earlier
-                    break;
                 case 0xF2: //Restart runtime, handled earlier
-                    break;
                 case 0xFF: //Graceful computer shutdown, handled earlier
-                    break;
                 default:
                     std::cerr << "Unknown command\n";
                     error_code = ACK_BADCOM; //unknown command
