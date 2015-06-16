@@ -15,6 +15,8 @@ int camera_main();
 int arm_timer();
 int disarm_timer();
 
+unsigned int stopwatch(unsigned int &watch);
+
 /* =============================================================================================
    Structure for camera data. The universal ID is unique to each camera and the handle allows
    the program to interact with the camera. The frame(s) are filled with images as they are

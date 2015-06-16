@@ -19,6 +19,10 @@
 #include <unistd.h>
 #include <time.h>
 #include <signal.h>
+
+#include "main.hpp"
+#include "camera.hpp"
+
 using namespace std;
 
 /* =============================================================================================
@@ -88,11 +92,14 @@ bool analyzePY(info& im, params val, valarray<unsigned char> &imarr)
 
 bool Find_3_mask(valarray<unsigned char> imarr, params& val, info& im)
 {
+    unsigned int watch;
     //get thresholds
     timeval t;
     if(val.a_timer)
         timetest(1,t,0);
+    if(MODE_TIMING) stopwatch(watch);
     find_thresh(imarr, im.thresh, val);
+    if(MODE_TIMING) cout << "|find_thresh took " << stopwatch(watch) << " us\n";
     if(val.a_timer) {
         cout<<"find_thresh ";
         timetest(2,t,0);
@@ -103,12 +110,14 @@ bool Find_3_mask(valarray<unsigned char> imarr, params& val, info& im)
         //threshold and mask
         if(val.a_timer)
             timetest(1,t,0);
+        if(MODE_TIMING) stopwatch(watch);
         valarray<unsigned short> mask(val.width * val.height);
 
         //mask entire imarr
         for (unsigned int p = 0; p < val.width * val.height; p++) {
             mask[p] = ((imarr[p] >= im.thresh[i] ) ? 1 : 0);
         }
+        if(MODE_TIMING) cout << "||mask took " << stopwatch(watch) << " us\n";
         //mask only the rows we use in centroiding - possibly didn't implement correctly. ran 10x slower
         /*for(int n=0; n<val.height;n+=val.ic){
             for (int p = n*val.width; p < (n+1)*val.width; p++){
@@ -127,13 +136,17 @@ bool Find_3_mask(valarray<unsigned char> imarr, params& val, info& im)
         }
 
         //centroid the mask
+        if(MODE_TIMING) stopwatch(watch);
         centroid(mask, val, im.xp[i], im.yp[i], im.there[i]);
-        ~mask;
+        if(MODE_TIMING) cout << "|||centroid took " << stopwatch(watch) << " us\n";
+        //~mask;
 
         //crop and black out the current sun from the mask
         if(im.there[i] == true) {
+            if(MODE_TIMING) stopwatch(watch);
             const char* fnc= "!dimsun_crop.fits";  //right now this calls all of them the same name, need to dynamically assign
             crop(imarr, fnc, im.xp[i], im.yp[i], val); //crops and blacks out sun > thresh
+            if(MODE_TIMING) cout << "||||crop took " << stopwatch(watch) << " us\n";
         }
     }
 
@@ -278,7 +291,7 @@ void centroid(valarray<unsigned short>& mask, params val, float& xloc, float& yl
         timetest(2,t,0);
     }
 
-    ~mask;
+    //~mask;
 /*    cout<<"wx: "<<weighted_sumx<<endl;
     cout<<"wy: "<<weighted_sumy<<endl;
     cout<<"sumx: "<<sumx<<endl;
@@ -326,7 +339,7 @@ bool crop(valarray<unsigned char>& imarr, const char* fn,  float x, float y, par
         if(val.savecrop){
             sliced = imarr[slicex];
             memcpy(&cropped[ny*val.box], &sliced[0] , val.box*size );
-            ~sliced;
+            //~sliced;
         }
 
         //black out region that is cropped

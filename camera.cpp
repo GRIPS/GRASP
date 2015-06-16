@@ -86,8 +86,6 @@ int arm_timer();
 int disarm_timer();
 int next_camera();
 
-unsigned int stopwatch(unsigned int &watch);
-
 void spawn_thread(int x);
 void *snap_thread(void *cam);
 void handle_wait(tCamera *Camera, tPvErr &errCode, int timeout2);
