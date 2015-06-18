@@ -24,6 +24,7 @@
 #define ACK_BADCRC  0x03
 #define ACK_BADSYS  0x04
 #define ACK_BADCOM  0x05
+#define ACK_BADVALUE 0x11
 
 //GRIPS system ID
 #define SYS_ID_FC  0x00
@@ -242,7 +243,7 @@ void *TelemetrySenderThread(void *threadargs)
             TelemetryPacket tp(NULL);
             tm_packet_queue >> tp;
             telSender.send( &tp );
-            if(MODE_NETWORK) std::cout << "TelemetrySender:" << tp << std::endl;
+            if(MODE_NETWORK) std::cout << "TelemetrySender: " << tp.getLength() << " bytes, " << tp << std::endl;
 /*
             if (LOG_PACKETS && log.is_open()) {
                 uint16_t length = tp.getLength();
@@ -509,19 +510,37 @@ void *CommandHandlerThread(void *threadargs)
                     error_code = 0;
                     break;
                 case 0xD1: //Set cadence of housekeeping packet
-                    cadence_housekeeping = *(uint8_t *)(my_data->payload);
-                    std::cout << "Setting cadence of housekeeping packet to " << cadence_housekeeping << " s\n";
-                    error_code = 0;
+                    value = *(uint8_t *)(my_data->payload);
+                    if(value > 0) {
+                        cadence_housekeeping = value;
+                        std::cout << "Setting cadence of housekeeping packet to "
+                                  << (int)cadence_housekeeping << " s\n";
+                        error_code = 0;
+                    } else {
+                        error_code = ACK_BADVALUE;
+                    }
                     break;
                 case 0xD2: //Set cadence of A2D temperatures packet
-                    cadence_a2d = *(uint8_t *)(my_data->payload);
-                    std::cout << "Setting cadence of A2D packet to " << cadence_a2d << " s\n";
-                    error_code = 0;
+                    value = *(uint8_t *)(my_data->payload);
+                    if(value > 0) {
+                        cadence_a2d = value;
+                        std::cout << "Setting cadence of A2D temperatures packet to "
+                                  << (int)cadence_a2d << " s\n";
+                        error_code = 0;
+                    } else {
+                        error_code = ACK_BADVALUE;
+                    }
                     break;
                 case 0xD3: //Set cadence of science packet
-                    cadence_science = *(uint8_t *)(my_data->payload);
-                    std::cout << "Setting cadence of science packet to " << cadence_science << " s\n";
-                    error_code = 0;
+                    value = *(uint8_t *)(my_data->payload);
+                    if(value > 0) {
+                        cadence_science = value;
+                        std::cout << "Setting cadence of science packet to "
+                                  << (int)cadence_science << " s\n";
+                        error_code = 0;
+                    } else {
+                        error_code = ACK_BADVALUE;
+                    }
                     break;
                 case 0xE0: //Load parameter table
                     break;
@@ -539,9 +558,14 @@ void *CommandHandlerThread(void *threadargs)
             switch(my_data->command_key & 0xF)
             {
                 case 0x4: //Set FPS
-                    CAMERAS[0].Rate = *(uint16_t *)(my_data->payload);
-                    std::cout << "Setting pitch-yaw camera rate to " << CAMERAS[0].Rate << " Hz\n";
-                    error_code = arm_timer();
+                    value = *(uint16_t *)(my_data->payload);
+                    if(value > 0) {
+                        CAMERAS[0].Rate = value;
+                        std::cout << "Setting pitch-yaw camera rate to " << CAMERAS[0].Rate << " Hz\n";
+                        error_code = arm_timer();
+                    } else {
+                        error_code = ACK_BADVALUE;
+                    }
                     break;
                 case 0x5: //Set gain
                     CAMERAS[0].Gain = *(uint8_t *)(my_data->payload);
@@ -567,9 +591,14 @@ void *CommandHandlerThread(void *threadargs)
             switch(my_data->command_key & 0xF)
             {
                 case 0x4: //Set FPS
-                    CAMERAS[1].Rate = *(uint16_t *)(my_data->payload);
-                    std::cout << "Setting roll camera rate to " << CAMERAS[1].Rate << " Hz\n";
-                    error_code = arm_timer();
+                    value = *(uint16_t *)(my_data->payload);
+                    if(value > 0) {
+                        CAMERAS[0].Rate = value;
+                        std::cout << "Setting row camera rate to " << CAMERAS[1].Rate << " Hz\n";
+                        error_code = arm_timer();
+                    } else {
+                        error_code = ACK_BADVALUE;
+                    }
                     break;
                 case 0x5: //Set gain
                     CAMERAS[1].Gain = *(uint8_t *)(my_data->payload);

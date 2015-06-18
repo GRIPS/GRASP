@@ -30,7 +30,7 @@ int main(int argc, char *argv[])
     }
 
     std::cout << cp << std::endl;
-    std::cout << "Packet size: " << cp.getReadIndex()+cp.remainingBytes() << std::endl;
+    std::cout << "Packet size: " << cp.getLength() << std::endl;
 
     cmdSender.send( &cp );
 
