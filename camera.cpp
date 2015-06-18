@@ -714,12 +714,27 @@ void Process(tCamera *Camera)
     //timeval t;
     //2. analyze live or test image?
     if(MODE_MOCK) {
+        valarray<unsigned char> imarr2;
+
+        // read file and introduce a shift to the image
+        uint8_t row_shift = 0, col_shift = 0; // for shorter code, these shifts must be nonnegative
         if(py) {
             const char* filename1 = "mock_py.fits";        //sun is 330 pix
-            readfits(filename1, imarr, val.width, val.height);
+            readfits(filename1, imarr2, val.width, val.height);
+            row_shift = 25. * (1 - cos(5. * Camera->pcount * M_PI / 180.)); // 5 deg CW per frame
+            col_shift = 25. * (1 + sin(5. * Camera->pcount * M_PI / 180.)); // 5 deg CW per frame
         } else {
             const char* filename1 = "mock_r.fits";
-            readfits(filename1, imarr, val.width, val.height);
+            readfits(filename1, imarr2, val.width, val.height);
+            row_shift = 25. * (1 - cos(5. * Camera->pcount * M_PI / 180.)); // 5 deg CW per frame
+            col_shift = 25. * (1 + sin(5. * Camera->pcount * M_PI / 180.)); // 5 deg CW per frame
+        }
+        if((val.width == Camera->FrameWidth) && (val.height == Camera->FrameHeight)) {
+            uint32_t start = row_shift * val.width + col_shift;
+            memcpy(&imarr[start], &imarr2[0], val.width * val.height - start);
+            memcpy(&imarr[0], &imarr2[val.width * val.height - start], start);
+        } else {
+            std::cerr << "Specified mock image does not match sensor dimentions\n";
         }
     }
     if(MODE_TIMING) cout << (py ? "Pitch-yaw" : "Roll")
