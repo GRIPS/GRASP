@@ -587,6 +587,7 @@ void *CommandHandlerThread(void *threadargs)
                     error_code = ACK_BADCOM; //unknown command
                     response = my_data->command_key;
             } //switch for command key
+            if(error_code == 0) queue_settings_tmpacket();
             break;
         case SYS_ID_RC:
             switch(my_data->command_key & 0xF)
@@ -594,8 +595,8 @@ void *CommandHandlerThread(void *threadargs)
                 case 0x4: //Set FPS
                     value = *(uint16_t *)(my_data->payload);
                     if(value > 0) {
-                        CAMERAS[0].Rate = value;
-                        std::cout << "Setting row camera rate to " << CAMERAS[1].Rate << " Hz\n";
+                        CAMERAS[1].Rate = value;
+                        std::cout << "Setting roll camera rate to " << CAMERAS[1].Rate << " Hz\n";
                         error_code = arm_timer();
                     } else {
                         error_code = ACK_BADVALUE;
@@ -620,6 +621,7 @@ void *CommandHandlerThread(void *threadargs)
                     error_code = ACK_BADCOM; //unknown command
                     response = my_data->command_key;
             } //switch for command key
+            if(error_code == 0) queue_settings_tmpacket();
             break;
         default:
             std::cerr << "Unknown system ID\n";
