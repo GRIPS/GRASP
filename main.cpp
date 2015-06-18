@@ -13,7 +13,7 @@
 //IP addresses
 #define IP_FC "192.168.2.100"
 #define IP_LOOPBACK "127.0.0.1"
-#define IP_TM IP_FC
+#define IP_TM IP_FC //default IP address unless overridden on the command line
 
 //UDP ports, aside from PORT_IMAGE, which is TCP
 #define PORT_CMD      50501 // commands, FC (receive)
@@ -79,6 +79,7 @@ float grid_rotation_rate = -1;
 struct dmminfo DMM1;
 float temp_py = 0, temp_roll = 0, temp_mb = 0;
 uint8_t cadence_housekeeping = 1, cadence_a2d = 1, cadence_science = 1; //seconds
+char ip_tm[20];
 
 // global mode variables
 bool MODE_COMPRESS = false; //used by camera main
@@ -233,7 +234,7 @@ void *TelemetrySenderThread(void *threadargs)
         log.open(filename, std::ofstream::binary);
     }
 */
-    TelemetrySender telSender(IP_TM, (unsigned short) PORT_TM);
+    TelemetrySender telSender(ip_tm, (unsigned short) PORT_TM);
 
     while(!stop_message[tid])
     {
@@ -761,6 +762,8 @@ void start_all_workers()
 
 int main(int argc, char *argv[])
 {
+    strncpy(ip_tm, IP_TM, 20);
+
     for(int i = 1; i < argc; i++) {
         if(argv[i][0] == '-') {
             for(int j = 1; argv[i][j] != 0; j++) {
@@ -768,6 +771,11 @@ int main(int argc, char *argv[])
                     case 'c':
                         std::cout << "Compress mode\n";
                         MODE_COMPRESS = true;
+                        break;
+                    case 'i':
+                        strncpy(ip_tm, &argv[i][j+1], 20);
+                        ip_tm[19] = 0;
+                        j = strlen(&argv[i][0]) - 1;
                         break;
                     case 'm':
                         std::cout << "Mock mode\n";
@@ -791,12 +799,13 @@ int main(int argc, char *argv[])
                         break;
                     case '?':
                         std::cout << "Command-line options:\n";
-                        std::cout << "-c  Use Rice compression when saving FITS files\n";
-                        std::cout << "-m  Use mock images instead of real images\n";
-                        std::cout << "-n  Display network packets (can be crazy!)\n";
-                        std::cout << "-t  Perform timing tests\n";
-                        std::cout << "-u  Assume the A2D board and cameras are not connected\n";
-                        std::cout << "-v  Verbose messages (mostly on the camera side)\n";
+                        std::cout << "-c      Use Rice compression when saving FITS files\n";
+                        std::cout << "-i<ip>  Send telemetry packets to this IP (instead of the FC's IP)\n";
+                        std::cout << "-m      Use mock images instead of real images\n";
+                        std::cout << "-n      Display network packets (can be crazy!)\n";
+                        std::cout << "-t      Perform timing tests\n";
+                        std::cout << "-u      Assume the A2D board and cameras are not connected\n";
+                        std::cout << "-v      Verbose messages (mostly on the camera side)\n";
                         return -1;
                     default:
                         std::cerr << "Unknown option, use -? to list options\n";
@@ -821,6 +830,8 @@ int main(int argc, char *argv[])
 
     pthread_mutex_init(&mutexStartThread, NULL);
     pthread_mutex_init(&mutexAnalysis, NULL);
+
+    std::cout << "Sending telemetry to " << ip_tm << std::endl;
 
     /* Create worker threads */
     printf("In main: creating threads\n");
