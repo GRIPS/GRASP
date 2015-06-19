@@ -746,7 +746,6 @@ void cmd_process_command(CommandPacket &cp)
     switch(tdata.command_key)
     {
         case KEY_NULL:
-            queue_cmd_proc_ack_tmpacket(0, 0);
             break;
         case KEY_RESTART_WORKERS:
             kill_all_workers();
@@ -765,7 +764,9 @@ void cmd_process_command(CommandPacket &cp)
             break;
         default:
             start_thread(CommandHandlerThread, &tdata);
+            return; //skip sending an additional ACK packet here
     } //switch
+    queue_cmd_proc_ack_tmpacket(0, 0);
 }
 
 void start_all_workers()
