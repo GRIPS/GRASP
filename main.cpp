@@ -670,10 +670,10 @@ void *IRSensorThread(void *threadargs)
         if (new_trigger_time > old_trigger_time) {
             delta = new_trigger_time - old_trigger_time;
 
-            //Assuming four pulses per full rotation
-            local_grid_rotation_rate = 0.25 / (delta * 1e-7 / 60);
+            //Assuming one pulse per full rotation, calculate the RPM
+            local_grid_rotation_rate = 1. / (delta * 1e-7 / 60);
 
-            //Reject anomalous readings
+            //Reject anomalous readings (>= 30 RPM)
             if (local_grid_rotation_rate < 30) {
                 grid_rotation_rate = local_grid_rotation_rate;
                 old_trigger_time = new_trigger_time;
