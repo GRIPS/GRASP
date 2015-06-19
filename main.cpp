@@ -803,6 +803,7 @@ void start_all_workers()
 
 int main(int argc, char *argv[])
 {
+    uint8_t table_to_load = 255;
     strncpy(ip_tm, IP_TM, 20);
 
     for(int i = 1; i < argc; i++) {
@@ -826,6 +827,10 @@ int main(int argc, char *argv[])
                         std::cout << "Network diagnostics mode\n";
                         MODE_NETWORK = true;
                         break;
+                    case 's':
+                        table_to_load = atoi(&argv[i][j+1]);
+                        j = strlen(&argv[i][0]) - 1;
+                        break;
                     case 't':
                         std::cout << "Timing mode\n";
                         MODE_TIMING = true;
@@ -844,6 +849,7 @@ int main(int argc, char *argv[])
                         std::cout << "-i<ip>  Send telemetry packets to this IP (instead of the FC's IP)\n";
                         std::cout << "-m      Use mock images instead of real images\n";
                         std::cout << "-n      Display network packets (can be crazy!)\n";
+                        std::cout << "-s<#>   Load table (0 to 255)\n";
                         std::cout << "-t      Perform timing tests\n";
                         std::cout << "-u      Assume the A2D board and cameras are not connected\n";
                         std::cout << "-v      Verbose messages (mostly on the camera side)\n";
@@ -870,8 +876,12 @@ int main(int argc, char *argv[])
     if(oeb_init() != 0) return 1;
 
     // Load settings from previous run, or load table 0
-    if(load_settings(255) == 0) {
-        std::cout << "Loading settings from previous run\n";
+    if(load_settings(table_to_load) == 0) {
+        if(table_to_load == 255) {
+            std::cout << "Loading settings from previous run\n";
+        } else {
+            std::cout << "Loading settings from table " << (int)table_to_load << std::endl;
+        }
     } else if(load_settings(0) == 0) {
         std::cout << "Loading settings from table 0\n";
     } else {
