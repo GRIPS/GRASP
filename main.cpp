@@ -571,9 +571,10 @@ void *CommandHandlerThread(void *threadargs)
                     value = *(uint8_t *)(my_data->payload);
                     std::cout << "Loading table " << (int)value << std::endl;
                     error_code = load_settings(value);
+                    if(error_code == 0) queue_settings_tmpacket();
                     synchronize_settings();
                     arm_timer();
-                    //note that settings are not saved so that one can immediately revert
+                    //note that settings are not saved at this point to enable an undo
                     break;
                 default:
                     std::cerr << "Unknown command\n";
@@ -586,10 +587,11 @@ void *CommandHandlerThread(void *threadargs)
             {
                 case KEY_CAMERA_FPS: //Set FPS
                     value = *(uint16_t *)(my_data->payload);
-                    if(value > 0) {
+                    if(value > 0 && value <= 10) {
                         current_settings.PY_rate = value;
                         synchronize_settings();
-                        std::cout << "Setting pitch-yaw camera rate to " << current_settings.PY_rate << " Hz\n";
+                        std::cout << "Setting pitch-yaw camera rate to "
+                                  << (int)current_settings.PY_rate << " Hz\n";
                         error_code = arm_timer();
                         if(error_code == 0) save_settings();
                     } else {
@@ -599,13 +601,15 @@ void *CommandHandlerThread(void *threadargs)
                 case KEY_CAMERA_GAIN: //Set gain
                     current_settings.PY_gain = *(uint8_t *)(my_data->payload);
                     synchronize_settings();
-                    std::cout << "Setting pitch-yaw camera gain to " << current_settings.PY_gain << " dB\n";
+                    std::cout << "Setting pitch-yaw camera gain to "
+                              << (int)current_settings.PY_gain << " dB\n";
                     save_settings();
                     break;
                 case KEY_CAMERA_EXPOSURE: //Set exposure
                     current_settings.PY_exposure = *(uint16_t *)(my_data->payload);
                     synchronize_settings();
-                    std::cout << "Setting pitch-yaw camera exposure to " << current_settings.PY_exposure << " us\n";
+                    std::cout << "Setting pitch-yaw camera exposure to "
+                              << (int)current_settings.PY_exposure << " us\n";
                     save_settings();
                     break;
                 case KEY_CAMERA_SEND_LAST: //Send latest image
@@ -626,10 +630,11 @@ void *CommandHandlerThread(void *threadargs)
             {
                 case KEY_CAMERA_FPS: //Set FPS
                     value = *(uint16_t *)(my_data->payload);
-                    if(value > 0) {
+                    if(value > 0 && value <= 10) {
                         current_settings.R_rate = value;
                         synchronize_settings();
-                        std::cout << "Setting roll camera rate to " << current_settings.R_rate << " Hz\n";
+                        std::cout << "Setting roll camera rate to "
+                                  << (int)current_settings.R_rate << " Hz\n";
                         error_code = arm_timer();
                         if(error_code == 0) save_settings();
                     } else {
@@ -639,13 +644,15 @@ void *CommandHandlerThread(void *threadargs)
                 case KEY_CAMERA_GAIN: //Set gain
                     current_settings.R_gain = *(uint8_t *)(my_data->payload);
                     synchronize_settings();
-                    std::cout << "Setting roll camera gain to " << current_settings.R_gain << " dB\n";
+                    std::cout << "Setting roll camera gain to "
+                              << (int)current_settings.R_gain << " dB\n";
                     save_settings();
                     break;
                 case KEY_CAMERA_EXPOSURE: //Set exposure
                     current_settings.R_exposure = *(uint16_t *)(my_data->payload);
                     synchronize_settings();
-                    std::cout << "Setting roll camera exposure to " << current_settings.R_exposure << " us\n";
+                    std::cout << "Setting roll camera exposure to "
+                              << (int)current_settings.R_exposure << " us\n";
                     save_settings();
                     break;
                 case KEY_CAMERA_SEND_LAST: //Send latest image
