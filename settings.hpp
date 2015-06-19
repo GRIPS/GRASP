@@ -22,6 +22,6 @@ int load_settings(uint8_t table);
 void save_settings(); // always saves to table 255
 
 extern struct settings current_settings;
-extern bool settings_changed;
+extern uint8_t current_table;
 
 #endif

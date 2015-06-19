@@ -33,6 +33,7 @@
 #include "main.hpp"
 #include "oeb.h"
 #include "Image.hpp"
+#include "settings.hpp"
 
 //PvApi libraries
 #include <PvApi.h>
@@ -132,6 +133,7 @@ int camera_main()
 
             // Grab cameras.
             if(CameraGrab()) {
+                synchronize_settings();
                 // Set up cameras.
                 bool setupSuccess = true;
                 for(unsigned int i = 0; i < NUMOFCAMERAS; i++) {
@@ -313,21 +315,31 @@ bool CameraGrab()
 
 
 /* =============================================================================================
+   Synchronize camera settings from a different global...
+   ========================================================================================== */
+void synchronize_settings()
+{
+    for(unsigned int i = 0; i < NUMOFCAMERAS; i++) {
+        if(is_pyc(&CAMERAS[i])) {
+            CAMERAS[i].Rate = current_settings.PY_rate;
+            CAMERAS[i].ExposureLength = current_settings.PY_exposure;
+            CAMERAS[i].Gain = current_settings.PY_gain;
+        } else {
+            CAMERAS[i].Rate = current_settings.R_rate;
+            CAMERAS[i].ExposureLength = current_settings.R_exposure;
+            CAMERAS[i].Gain = current_settings.R_gain;
+        }
+    }
+}
+// __________________________________________________________________________________________end
+
+
+/* =============================================================================================
    Opens a camera and fills in parameters.
    ========================================================================================== */
 bool CameraSetup(tCamera *Camera)
 {
-    // Default settings are hard-coded, but should load from parameter table (FIXME)
     Camera->WantToSave = true;
-    if(is_pyc(Camera)) {
-        Camera->Rate = 1;
-        Camera->ExposureLength = 20000;
-        Camera->Gain = 0;
-    } else {
-        Camera->Rate = 1;
-        Camera->ExposureLength = 4000;
-        Camera->Gain = 0;
-    }
 
     printf("%s camera settings: %u Hz, %lu us, %lu dB gain, %s\n",
            (is_pyc(Camera) ? "Pitch-yaw" : "Roll"),

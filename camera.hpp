@@ -14,6 +14,7 @@
 int camera_main();
 int arm_timer();
 int disarm_timer();
+void synchronize_settings();
 
 unsigned int stopwatch(unsigned int &watch);
 

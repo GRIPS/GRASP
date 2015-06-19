@@ -5,7 +5,7 @@
 using namespace std;
 
 struct settings current_settings;
-bool settings_changed;
+uint8_t current_table;
 
 int load_settings(uint8_t table)
 {
@@ -24,7 +24,7 @@ int load_settings(uint8_t table)
         fscanf(infile, "%hhu", &current_settings.cadence_a2d);
         fscanf(infile, "%hhu", &current_settings.cadence_science);
         fclose(infile);
-        settings_changed = false;
+        current_table = table;
         return 0;
     } else return -1;
 }
@@ -43,6 +43,6 @@ void save_settings()
         fprintf(outfile, "%hhu\n", current_settings.cadence_a2d);
         fprintf(outfile, "%hhu\n", current_settings.cadence_science);
         fclose(outfile);
-        settings_changed = true;
+        current_table = 255;
     }
 }
