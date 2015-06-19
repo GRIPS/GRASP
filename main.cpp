@@ -90,6 +90,7 @@
 #include "camera.hpp"
 #include "oeb.h"
 #include "dmm.h"
+#include "settings.hpp"
 
 // global declarations
 uint8_t command_sequence_number = -1;
@@ -100,7 +101,6 @@ volatile uint8_t roll_image_counter = 0;
 float grid_rotation_rate = -1;
 struct dmminfo DMM1;
 float temp_py = 0, temp_roll = 0, temp_mb = 0;
-uint8_t cadence_housekeeping = 1, cadence_a2d = 1, cadence_science = 1; //seconds
 char ip_tm[20];
 
 // global mode variables
@@ -297,7 +297,7 @@ void *TelemetryHousekeepingThread(void *threadargs)
 
     while(!stop_message[tid])
     {
-        usleep_force(cadence_housekeeping * 1000000);
+        usleep_force(current_settings.cadence_housekeeping * 1000000);
         tm_frame_sequence_number++;
 
         TelemetryPacket tp(SYS_ID_ASP, TM_HOUSEKEEPING, tm_frame_sequence_number, oeb_get_clock());
@@ -328,7 +328,7 @@ void *TelemetryA2DThread(void *threadargs)
 
     while(!stop_message[tid])
     {
-        usleep_force(cadence_a2d * 1000000);
+        usleep_force(current_settings.cadence_a2d * 1000000);
 
         DMMUpdateADC(&DMM1);
 
@@ -357,7 +357,7 @@ void *TelemetryScienceThread(void *threadargs)
 
     while(!stop_message[tid])
     {
-        usleep_force(cadence_science * 1000000);
+        usleep_force(current_settings.cadence_science * 1000000);
         tm_frame_sequence_number++;
 
         TelemetryPacket tp(SYS_ID_ASP, TM_SCIENCE, tm_frame_sequence_number, oeb_get_clock());
@@ -535,10 +535,11 @@ void *CommandHandlerThread(void *threadargs)
                 case KEY_TM_CADENCE_HK: //Set cadence of housekeeping packet
                     value = *(uint8_t *)(my_data->payload);
                     if(value > 0) {
-                        cadence_housekeeping = value;
+                        current_settings.cadence_housekeeping = value;
                         std::cout << "Setting cadence of housekeeping packet to "
-                                  << (int)cadence_housekeeping << " s\n";
+                                  << (int)current_settings.cadence_housekeeping << " s\n";
                         error_code = 0;
+                        save_settings();
                     } else {
                         error_code = ACK_BADVALUE;
                     }
@@ -546,10 +547,11 @@ void *CommandHandlerThread(void *threadargs)
                 case KEY_TM_CADENCE_A2D: //Set cadence of A2D temperatures packet
                     value = *(uint8_t *)(my_data->payload);
                     if(value > 0) {
-                        cadence_a2d = value;
+                        current_settings.cadence_a2d = value;
                         std::cout << "Setting cadence of A2D temperatures packet to "
-                                  << (int)cadence_a2d << " s\n";
+                                  << (int)current_settings.cadence_a2d << " s\n";
                         error_code = 0;
+                        save_settings();
                     } else {
                         error_code = ACK_BADVALUE;
                     }
@@ -557,15 +559,20 @@ void *CommandHandlerThread(void *threadargs)
                 case KEY_TM_CADENCE_SCIENCE: //Set cadence of science packet
                     value = *(uint8_t *)(my_data->payload);
                     if(value > 0) {
-                        cadence_science = value;
+                        current_settings.cadence_science = value;
                         std::cout << "Setting cadence of science packet to "
-                                  << (int)cadence_science << " s\n";
+                                  << (int)current_settings.cadence_science << " s\n";
                         error_code = 0;
+                        save_settings();
                     } else {
                         error_code = ACK_BADVALUE;
                     }
                     break;
                 case KEY_LOAD_PARAMETERS: //Load parameter table
+                    value = *(uint8_t *)(my_data->payload);
+                    std::cout << "Loading table " << (int)value << std::endl;
+                    error_code = load_settings(value);
+                    //note that settings are not saved so that one can immediately revert
                     break;
                 default:
                     std::cerr << "Unknown command\n";
@@ -579,20 +586,23 @@ void *CommandHandlerThread(void *threadargs)
                 case KEY_CAMERA_FPS: //Set FPS
                     value = *(uint16_t *)(my_data->payload);
                     if(value > 0) {
-                        CAMERAS[0].Rate = value;
+                        current_settings.PY_rate = CAMERAS[0].Rate = value;
                         std::cout << "Setting pitch-yaw camera rate to " << CAMERAS[0].Rate << " Hz\n";
                         error_code = arm_timer();
+                        if(error_code == 0) save_settings();
                     } else {
                         error_code = ACK_BADVALUE;
                     }
                     break;
                 case KEY_CAMERA_GAIN: //Set gain
-                    CAMERAS[0].Gain = *(uint8_t *)(my_data->payload);
+                    current_settings.PY_gain = CAMERAS[0].Gain = *(uint8_t *)(my_data->payload);
                     std::cout << "Setting pitch-yaw camera gain to " << CAMERAS[0].Gain << " dB\n";
+                    save_settings();
                     break;
                 case KEY_CAMERA_EXPOSURE: //Set exposure
-                    CAMERAS[0].ExposureLength = *(uint16_t *)(my_data->payload);
+                    current_settings.PY_exposure = CAMERAS[0].ExposureLength = *(uint16_t *)(my_data->payload);
                     std::cout << "Setting pitch-yaw camera exposure to " << CAMERAS[0].ExposureLength << " us\n";
+                    save_settings();
                     break;
                 case KEY_CAMERA_SEND_LAST: //Send latest image
                     TRANSMIT_NEXT_PY_IMAGE = true;
@@ -613,20 +623,23 @@ void *CommandHandlerThread(void *threadargs)
                 case KEY_CAMERA_FPS: //Set FPS
                     value = *(uint16_t *)(my_data->payload);
                     if(value > 0) {
-                        CAMERAS[1].Rate = value;
+                        current_settings.R_rate = CAMERAS[1].Rate = value;
                         std::cout << "Setting roll camera rate to " << CAMERAS[1].Rate << " Hz\n";
                         error_code = arm_timer();
+                        if(error_code == 0) save_settings();
                     } else {
                         error_code = ACK_BADVALUE;
                     }
                     break;
                 case KEY_CAMERA_GAIN: //Set gain
-                    CAMERAS[1].Gain = *(uint8_t *)(my_data->payload);
+                    current_settings.R_gain = CAMERAS[1].Gain = *(uint8_t *)(my_data->payload);
                     std::cout << "Setting roll camera gain to " << CAMERAS[1].Gain << " dB\n";
+                    save_settings();
                     break;
                 case KEY_CAMERA_EXPOSURE: //Set exposure
-                    CAMERAS[1].ExposureLength = *(uint16_t *)(my_data->payload);
+                    current_settings.R_exposure = CAMERAS[1].ExposureLength = *(uint16_t *)(my_data->payload);
                     std::cout << "Setting roll camera exposure to " << CAMERAS[1].ExposureLength << " us\n";
+                    save_settings();
                     break;
                 case KEY_CAMERA_SEND_LAST: //Send latest image
                     TRANSMIT_NEXT_R_IMAGE = true;
@@ -849,6 +862,16 @@ int main(int argc, char *argv[])
     // initialize odds & ends board
     if(oeb_init() != 0) return 1;
 
+    // Load settings from previous run, or load table 0
+    if(load_settings(255) == 0) {
+        std::cout << "Loading settings from previous run\n";
+    } else if(load_settings(0) == 0) {
+        std::cout << "Loading settings from table 0\n";
+    } else {
+        std::cerr << "Error loading settings\n";
+        return -1;
+    }
+
     pthread_mutex_init(&mutexStartThread, NULL);
     pthread_mutex_init(&mutexAnalysis, NULL);
 
@@ -889,6 +912,8 @@ int main(int argc, char *argv[])
     kill_all_threads();
     pthread_mutex_destroy(&mutexStartThread);
     pthread_mutex_destroy(&mutexAnalysis);
+
+    save_settings();
 
     oeb_uninit();
 

@@ -35,6 +35,6 @@ quick: quick.o
 dmm.o: dmm/dmm.c dmm/dmm.h
 	$(CC) $(CXXFLAGS) -c $<
 
-main: main.o oeb.o dmm.o camera.o analysis.o Image.o
+main: main.o oeb.o dmm.o camera.o analysis.o Image.o settings.o
 	make -C network all
 	$(CC) -o $@ $^ network/*.o -pthread -L$(CCfitslib) -lCCfits $(PVLIB) $(SOLIB) $(RPATH)
