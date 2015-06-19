@@ -44,8 +44,30 @@
 //GRIPS commands, shared
 #define KEY_NULL                 0x00
 
-//GRIPS commands, ASP specific
-#define KEY_OTHER                0x10
+//ASP commands
+#define KEY_SET_CLOCK_FOR_SYNC   0x99
+#define KEY_PYC_OFF              0xA0 //not yet implemented
+#define KEY_PYC_ON               0xA1 //not yet implemented
+#define KEY_RC_OFF               0xB0 //not yet implemented
+#define KEY_RC_ON                0xB1 //not yet implemented
+#define KEY_IRS_OFF              0xC0 //not yet implemented
+#define KEY_IRS_ON               0xC1 //not yet implemented
+#define KEY_TM_SEND_SETTINGS     0xD0
+#define KEY_TM_CADENCE_HK        0xD1
+#define KEY_TM_CADENCE_A2D       0xD2
+#define KEY_TM_CADENCE_SCIENCE   0xD3
+#define KEY_LOAD_PARAMETERS      0xE0 //not yet implemented
+#define KEY_RESTART_WORKERS      0xF0
+#define KEY_RESTART_ALL          0xF1
+#define KEY_EXIT                 0xF2
+#define KEY_SHUTDOWN             0xFF //not yet implemented
+
+//ASP commands, camera-specific
+#define KEY_CAMERA_FPS           0x4
+#define KEY_CAMERA_GAIN          0x5
+#define KEY_CAMERA_EXPOSURE      0x6
+#define KEY_CAMERA_SEND_LAST     0xC
+#define KEY_CAMERA_SEND_SPECIFIC 0xD //not yet implemented
 
 #include <cstring>
 #include <stdio.h>      /* for printf() and fprintf() */
@@ -489,28 +511,28 @@ void *CommandHandlerThread(void *threadargs)
         case SYS_ID_ASP:
             switch(my_data->command_key)
             {
-                case 0x99: //Set clock value to sync to
+                case KEY_SET_CLOCK_FOR_SYNC: //Set clock value to sync to
                     memcpy(&value, my_data->payload, 6);
                     oeb_set_clock(value);
                     error_code = 0;
                     break;
-                case 0xA0: //Turn OFF pitch-yaw camera
+                case KEY_PYC_OFF: //Turn OFF pitch-yaw camera
                     break;
-                case 0xA1: //Turn ON pitch-yaw camera
+                case KEY_PYC_ON: //Turn ON pitch-yaw camera
                     break;
-                case 0xB0: //Turn OFF roll camera
+                case KEY_RC_OFF: //Turn OFF roll camera
                     break;
-                case 0xB1: //Turn ON roll camera
+                case KEY_RC_ON: //Turn ON roll camera
                     break;
-                case 0xC0: //Turn OFF IR sensor
+                case KEY_IRS_OFF: //Turn OFF IR sensor
                     break;
-                case 0xC1: //Turn ON IR sensor
+                case KEY_IRS_ON: //Turn ON IR sensor
                     break;
-                case 0xD0: //Request settings telemetry packet
+                case KEY_TM_SEND_SETTINGS: //Request settings telemetry packet
                     queue_settings_tmpacket();
                     error_code = 0;
                     break;
-                case 0xD1: //Set cadence of housekeeping packet
+                case KEY_TM_CADENCE_HK: //Set cadence of housekeeping packet
                     value = *(uint8_t *)(my_data->payload);
                     if(value > 0) {
                         cadence_housekeeping = value;
@@ -521,7 +543,7 @@ void *CommandHandlerThread(void *threadargs)
                         error_code = ACK_BADVALUE;
                     }
                     break;
-                case 0xD2: //Set cadence of A2D temperatures packet
+                case KEY_TM_CADENCE_A2D: //Set cadence of A2D temperatures packet
                     value = *(uint8_t *)(my_data->payload);
                     if(value > 0) {
                         cadence_a2d = value;
@@ -532,7 +554,7 @@ void *CommandHandlerThread(void *threadargs)
                         error_code = ACK_BADVALUE;
                     }
                     break;
-                case 0xD3: //Set cadence of science packet
+                case KEY_TM_CADENCE_SCIENCE: //Set cadence of science packet
                     value = *(uint8_t *)(my_data->payload);
                     if(value > 0) {
                         cadence_science = value;
@@ -543,12 +565,8 @@ void *CommandHandlerThread(void *threadargs)
                         error_code = ACK_BADVALUE;
                     }
                     break;
-                case 0xE0: //Load parameter table
+                case KEY_LOAD_PARAMETERS: //Load parameter table
                     break;
-                case 0xF0: //Restart worker threads, handled earlier
-                case 0xF1: //Restart all threads, handled earlier
-                case 0xF2: //Restart runtime, handled earlier
-                case 0xFF: //Graceful computer shutdown, handled earlier
                 default:
                     std::cerr << "Unknown command\n";
                     error_code = ACK_BADCOM; //unknown command
@@ -558,7 +576,7 @@ void *CommandHandlerThread(void *threadargs)
         case SYS_ID_PYC:
             switch(my_data->command_key & 0xF)
             {
-                case 0x4: //Set FPS
+                case KEY_CAMERA_FPS: //Set FPS
                     value = *(uint16_t *)(my_data->payload);
                     if(value > 0) {
                         CAMERAS[0].Rate = value;
@@ -568,19 +586,19 @@ void *CommandHandlerThread(void *threadargs)
                         error_code = ACK_BADVALUE;
                     }
                     break;
-                case 0x5: //Set gain
+                case KEY_CAMERA_GAIN: //Set gain
                     CAMERAS[0].Gain = *(uint8_t *)(my_data->payload);
                     std::cout << "Setting pitch-yaw camera gain to " << CAMERAS[0].Gain << " dB\n";
                     break;
-                case 0x6: //Set exposure
+                case KEY_CAMERA_EXPOSURE: //Set exposure
                     CAMERAS[0].ExposureLength = *(uint16_t *)(my_data->payload);
                     std::cout << "Setting pitch-yaw camera exposure to " << CAMERAS[0].ExposureLength << " us\n";
                     break;
-                case 0xC: //Send latest image
+                case KEY_CAMERA_SEND_LAST: //Send latest image
                     TRANSMIT_NEXT_PY_IMAGE = true;
                     error_code = 0;
                     break;
-                case 0xD: //Send specific image
+                case KEY_CAMERA_SEND_SPECIFIC: //Send specific image
                     break;
                 default:
                     std::cerr << "Unknown command\n";
@@ -592,7 +610,7 @@ void *CommandHandlerThread(void *threadargs)
         case SYS_ID_RC:
             switch(my_data->command_key & 0xF)
             {
-                case 0x4: //Set FPS
+                case KEY_CAMERA_FPS: //Set FPS
                     value = *(uint16_t *)(my_data->payload);
                     if(value > 0) {
                         CAMERAS[1].Rate = value;
@@ -602,19 +620,19 @@ void *CommandHandlerThread(void *threadargs)
                         error_code = ACK_BADVALUE;
                     }
                     break;
-                case 0x5: //Set gain
+                case KEY_CAMERA_GAIN: //Set gain
                     CAMERAS[1].Gain = *(uint8_t *)(my_data->payload);
                     std::cout << "Setting roll camera gain to " << CAMERAS[1].Gain << " dB\n";
                     break;
-                case 0x6: //Set exposure
+                case KEY_CAMERA_EXPOSURE: //Set exposure
                     CAMERAS[1].ExposureLength = *(uint16_t *)(my_data->payload);
                     std::cout << "Setting roll camera exposure to " << CAMERAS[1].ExposureLength << " us\n";
                     break;
-                case 0xC: //Send latest image
+                case KEY_CAMERA_SEND_LAST: //Send latest image
                     TRANSMIT_NEXT_R_IMAGE = true;
                     error_code = 0;
                     break;
-                case 0xD: //Send specific image
+                case KEY_CAMERA_SEND_SPECIFIC: //Send specific image
                     break;
                 default:
                     std::cerr << "Unknown command\n";
@@ -727,22 +745,22 @@ void cmd_process_command(CommandPacket &cp)
 
     switch(tdata.command_key)
     {
-        case 0x00:
+        case KEY_NULL:
             queue_cmd_proc_ack_tmpacket(0, 0);
             break;
-        case 0xF0:
+        case KEY_RESTART_WORKERS:
             kill_all_workers();
             start_all_workers();
             break;
-        case 0xF1:
+        case KEY_RESTART_ALL:
             kill_all_threads();
             start_thread(CommandListenerThread, NULL);
             start_all_workers();
             break;
-        case 0xF2:
+        case KEY_EXIT:
             g_running = 0;
             break;
-        case 0xFF:
+        case KEY_SHUTDOWN:
             std::cerr << "Graceful computer shutdown not yet implemented!\n";
             break;
         default:
