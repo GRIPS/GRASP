@@ -203,8 +203,18 @@ void make_histo(uint8_t histo[], float histogram[])
             total1 += histogram[i * 16 + j];
             total2 += histogram[i * 16 + j + 8];
         }
-        uint8_t first = (total1 > 0 ? 2 * log10(total1) + 13.2 : 0);
-        uint8_t second = (total2 > 0 ? 2 * log10(total2) + 13.2 : 0);
+
+        //bin 0 is 0 pixels
+        //bin 1 is 1-2 pixels
+        //bin 2 is 3-6 pixels
+        //bin 3 is 7-16 pixels
+        //bin 4 is 17-42 pixels
+        //bin 5 is 43-111 pixels
+        //bin 6 is 112-291 pixels
+        //bin 7 is 292-760 pixels
+        //and so on
+        uint8_t first = (total1 > 0 ? 2.4 * log10(total1) + 15.7 : 0);
+        uint8_t second = (total2 > 0 ? 2.4 * log10(total2) + 15.7 : 0);
         histo[i] = (second << 4) + first;
     }
 }

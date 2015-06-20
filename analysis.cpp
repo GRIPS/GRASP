@@ -116,6 +116,7 @@ bool Find_3_mask(valarray<unsigned char> imarr, params& val, info& im)
         //mask entire imarr
         for (unsigned int p = 0; p < val.width * val.height; p++) {
             mask[p] = ((imarr[p] >= im.thresh[i] ) ? 1 : 0);
+            if(i == 0) im.histogram[imarr[p]] += 1; //accumulate histogram
         }
         if(MODE_TIMING) cout << "||mask took " << stopwatch(watch) << " us\n";
         //mask only the rows we use in centroiding - possibly didn't implement correctly. ran 10x slower
@@ -148,6 +149,11 @@ bool Find_3_mask(valarray<unsigned char> imarr, params& val, info& im)
             crop(imarr, fnc, im.xp[i], im.yp[i], val); //crops and blacks out sun > thresh
             if(MODE_TIMING) cout << "||||crop took " << stopwatch(watch) << " us\n";
         }
+    }
+
+    //normalize histogram
+    for(int bin = 0; bin < 255; bin++) {
+        im.histogram[bin] /= val.width * val.height;
     }
 
     //other function options to add in
