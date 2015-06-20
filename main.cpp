@@ -24,6 +24,7 @@
 #define ACK_BADCRC  0x03
 #define ACK_BADSYS  0x04
 #define ACK_BADCOM  0x05
+#define ACK_NOACTION 0x10
 #define ACK_BADVALUE 0x11
 
 //GRIPS system ID
@@ -544,11 +545,14 @@ void *CommandHandlerThread(void *threadargs)
                 case KEY_TM_CADENCE_HK: //Set cadence of housekeeping packet
                     value = *(uint8_t *)(my_data->payload);
                     if(value > 0) {
-                        current_settings.cadence_housekeeping = value;
-                        std::cout << "Setting cadence of housekeeping packet to "
-                                  << (int)current_settings.cadence_housekeeping << " s\n";
-                        error_code = 0;
-                        save_settings();
+                        if(set_if_different(current_settings.cadence_housekeeping, (uint8_t)value)) {
+                            std::cout << "Setting cadence of housekeeping packet to "
+                                      << (int)current_settings.cadence_housekeeping << " s\n";
+                            save_settings();
+                            error_code = 0;
+                        } else {
+                            error_code = ACK_NOACTION;
+                        }
                     } else {
                         error_code = ACK_BADVALUE;
                     }
@@ -556,11 +560,14 @@ void *CommandHandlerThread(void *threadargs)
                 case KEY_TM_CADENCE_A2D: //Set cadence of A2D temperatures packet
                     value = *(uint8_t *)(my_data->payload);
                     if(value > 0) {
-                        current_settings.cadence_a2d = value;
-                        std::cout << "Setting cadence of A2D temperatures packet to "
-                                  << (int)current_settings.cadence_a2d << " s\n";
-                        error_code = 0;
-                        save_settings();
+                        if(set_if_different(current_settings.cadence_a2d, (uint8_t)value)) {
+                            std::cout << "Setting cadence of A2D temperatures packet to "
+                                      << (int)current_settings.cadence_a2d << " s\n";
+                            save_settings();
+                            error_code = 0;
+                        } else {
+                            error_code = ACK_NOACTION;
+                        }
                     } else {
                         error_code = ACK_BADVALUE;
                     }
@@ -568,11 +575,14 @@ void *CommandHandlerThread(void *threadargs)
                 case KEY_TM_CADENCE_SCIENCE: //Set cadence of science packet
                     value = *(uint8_t *)(my_data->payload);
                     if(value > 0) {
-                        current_settings.cadence_science = value;
-                        std::cout << "Setting cadence of science packet to "
-                                  << (int)current_settings.cadence_science << " s\n";
-                        error_code = 0;
-                        save_settings();
+                        if(set_if_different(current_settings.cadence_science, (uint8_t)value)) {
+                            std::cout << "Setting cadence of science packet to "
+                                      << (int)current_settings.cadence_science << " s\n";
+                            save_settings();
+                            error_code = 0;
+                        } else {
+                            error_code = ACK_NOACTION;
+                        }
                     } else {
                         error_code = ACK_BADVALUE;
                     }
@@ -587,7 +597,6 @@ void *CommandHandlerThread(void *threadargs)
                     //note that settings are not saved at this point to enable an undo
                     break;
                 default:
-                    std::cerr << "Unknown command\n";
                     error_code = ACK_BADCOM; //unknown command
                     response = my_data->command_key;
             } //switch for command key
@@ -629,7 +638,6 @@ void *CommandHandlerThread(void *threadargs)
                 case KEY_CAMERA_SEND_SPECIFIC: //Send specific image
                     break;
                 default:
-                    std::cerr << "Unknown command\n";
                     error_code = ACK_BADCOM; //unknown command
                     response = my_data->command_key;
             } //switch for command key
@@ -672,17 +680,37 @@ void *CommandHandlerThread(void *threadargs)
                 case KEY_CAMERA_SEND_SPECIFIC: //Send specific image
                     break;
                 default:
-                    std::cerr << "Unknown command\n";
                     error_code = ACK_BADCOM; //unknown command
                     response = my_data->command_key;
             } //switch for command key
             if(error_code == 0) queue_settings_tmpacket();
             break;
         default:
-            std::cerr << "Unknown system ID\n";
             error_code = ACK_BADSYS; //unknown system ID
             response = my_data->system_id;
     } //switch for system ID
+
+    switch(error_code) {
+        case 0:
+            std::cout << "Command processed successfully\n";
+            break;
+        case ACK_BADSYS:
+            std::cerr << "Unknown system ID\n";
+            break;
+        case ACK_BADCOM:
+            std::cerr << "Unknown command\n";
+            break;
+        case ACK_NOACTION:
+            std::cerr << "Command ignored\n";
+            break;
+        case ACK_BADVALUE:
+            std::cerr << "Command had a bad value\n";
+            break;
+        case 0xFF:
+        default:
+            std::cerr << "Command not yet implemented\n";
+            break;
+    }
 
     queue_cmd_proc_ack_tmpacket( error_code, response );
 
