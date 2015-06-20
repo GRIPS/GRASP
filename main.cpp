@@ -514,7 +514,7 @@ void *CommandHandlerThread(void *threadargs)
     uint64_t response = 0;
     my_data = (struct Thread_data *) threadargs;
 
-    uint64_t value = 0;
+    uint64_t value = *(uint64_t *)(my_data->payload);
 
     switch(my_data->system_id)
     {
@@ -522,7 +522,7 @@ void *CommandHandlerThread(void *threadargs)
             switch(my_data->command_key)
             {
                 case KEY_SET_CLOCK_FOR_SYNC: //Set clock value to sync to
-                    memcpy(&value, my_data->payload, 6);
+                    value &= 0xFFFFFFFFFFFF; //keep only 6 bytes
                     oeb_set_clock(value);
                     error_code = 0;
                     break;
@@ -543,7 +543,7 @@ void *CommandHandlerThread(void *threadargs)
                     error_code = 0;
                     break;
                 case KEY_TM_CADENCE_HK: //Set cadence of housekeeping packet
-                    value = *(uint8_t *)(my_data->payload);
+                    value &= 0xFF;
                     if(value > 0) {
                         if(set_if_different(current_settings.cadence_housekeeping, (uint8_t)value)) {
                             std::cout << "Setting cadence of housekeeping packet to "
@@ -558,7 +558,7 @@ void *CommandHandlerThread(void *threadargs)
                     }
                     break;
                 case KEY_TM_CADENCE_A2D: //Set cadence of A2D temperatures packet
-                    value = *(uint8_t *)(my_data->payload);
+                    value &= 0xFF;
                     if(value > 0) {
                         if(set_if_different(current_settings.cadence_a2d, (uint8_t)value)) {
                             std::cout << "Setting cadence of A2D temperatures packet to "
@@ -573,7 +573,7 @@ void *CommandHandlerThread(void *threadargs)
                     }
                     break;
                 case KEY_TM_CADENCE_SCIENCE: //Set cadence of science packet
-                    value = *(uint8_t *)(my_data->payload);
+                    value &= 0xFF;
                     if(value > 0) {
                         if(set_if_different(current_settings.cadence_science, (uint8_t)value)) {
                             std::cout << "Setting cadence of science packet to "
@@ -588,12 +588,19 @@ void *CommandHandlerThread(void *threadargs)
                     }
                     break;
                 case KEY_LOAD_PARAMETERS: //Load parameter table
-                    value = *(uint8_t *)(my_data->payload);
-                    std::cout << "Loading table " << (int)value << std::endl;
-                    error_code = load_settings(value);
-                    if(error_code == 0) queue_settings_tmpacket();
-                    synchronize_settings();
-                    arm_timer();
+                    value &= 0xFF;
+                    if(value != current_table) {
+                        std::cout << "Loading table " << (int)value << std::endl;
+                        if(load_settings(value) == 0) {
+                            queue_settings_tmpacket();
+                            synchronize_settings();
+                            error_code = arm_timer();
+                        } else {
+                            error_code = ACK_BADVALUE;
+                        }
+                    } else {
+                        error_code = ACK_NOACTION;
+                    }
                     //note that settings are not saved at this point to enable an undo
                     break;
                 default:
@@ -605,31 +612,44 @@ void *CommandHandlerThread(void *threadargs)
             switch(my_data->command_key & 0xF)
             {
                 case KEY_CAMERA_FPS: //Set FPS
-                    value = *(uint16_t *)(my_data->payload);
+                    value &= 0xFF;
                     if(value > 0 && value <= 10) {
-                        current_settings.PY_rate = value;
-                        synchronize_settings();
-                        std::cout << "Setting pitch-yaw camera rate to "
-                                  << (int)current_settings.PY_rate << " Hz\n";
-                        error_code = arm_timer();
-                        if(error_code == 0) save_settings();
+                        if(set_if_different(current_settings.PY_rate, (uint8_t)value)) {
+                            synchronize_settings();
+                            std::cout << "Setting pitch-yaw camera rate to "
+                                      << (int)current_settings.PY_rate << " Hz\n";
+                            error_code = arm_timer();
+                            if(error_code == 0) save_settings();
+                        } else {
+                            error_code = ACK_NOACTION;
+                        }
                     } else {
                         error_code = ACK_BADVALUE;
                     }
                     break;
                 case KEY_CAMERA_GAIN: //Set gain
-                    current_settings.PY_gain = *(uint8_t *)(my_data->payload);
-                    synchronize_settings();
-                    std::cout << "Setting pitch-yaw camera gain to "
-                              << (int)current_settings.PY_gain << " dB\n";
-                    save_settings();
+                    value &= 0xFF;
+                    if(set_if_different(current_settings.PY_gain, (uint8_t)value)) {
+                        synchronize_settings();
+                        std::cout << "Setting pitch-yaw camera gain to "
+                                  << (int)current_settings.PY_gain << " dB\n";
+                        save_settings();
+                        error_code = 0;
+                    } else {
+                        error_code = ACK_NOACTION;
+                    }
                     break;
                 case KEY_CAMERA_EXPOSURE: //Set exposure
-                    current_settings.PY_exposure = *(uint16_t *)(my_data->payload);
-                    synchronize_settings();
-                    std::cout << "Setting pitch-yaw camera exposure to "
-                              << (int)current_settings.PY_exposure << " us\n";
-                    save_settings();
+                    value &= 0xFFFF;
+                    if(set_if_different(current_settings.PY_exposure, (uint16_t)value)) {
+                        synchronize_settings();
+                        std::cout << "Setting pitch-yaw camera exposure to "
+                                  << (int)current_settings.PY_exposure << " us\n";
+                        save_settings();
+                        error_code = 0;
+                    } else {
+                        error_code = ACK_NOACTION;
+                    }
                     break;
                 case KEY_CAMERA_SEND_LAST: //Send latest image
                     TRANSMIT_NEXT_PY_IMAGE = true;
@@ -647,7 +667,7 @@ void *CommandHandlerThread(void *threadargs)
             switch(my_data->command_key & 0xF)
             {
                 case KEY_CAMERA_FPS: //Set FPS
-                    value = *(uint16_t *)(my_data->payload);
+                    value &= 0xFF;
                     if(value > 0 && value <= 10) {
                         current_settings.R_rate = value;
                         synchronize_settings();
@@ -660,18 +680,28 @@ void *CommandHandlerThread(void *threadargs)
                     }
                     break;
                 case KEY_CAMERA_GAIN: //Set gain
-                    current_settings.R_gain = *(uint8_t *)(my_data->payload);
-                    synchronize_settings();
-                    std::cout << "Setting roll camera gain to "
-                              << (int)current_settings.R_gain << " dB\n";
-                    save_settings();
+                    value &= 0xFF;
+                    if(set_if_different(current_settings.R_gain, (uint8_t)value)) {
+                        synchronize_settings();
+                        std::cout << "Setting roll camera gain to "
+                                  << (int)current_settings.R_gain << " dB\n";
+                        save_settings();
+                        error_code = 0;
+                    } else {
+                        error_code = ACK_NOACTION;
+                    }
                     break;
                 case KEY_CAMERA_EXPOSURE: //Set exposure
-                    current_settings.R_exposure = *(uint16_t *)(my_data->payload);
-                    synchronize_settings();
-                    std::cout << "Setting roll camera exposure to "
-                              << (int)current_settings.R_exposure << " us\n";
-                    save_settings();
+                    value &= 0xFFFF;
+                    if(set_if_different(current_settings.R_exposure, (uint16_t)value)) {
+                        synchronize_settings();
+                        std::cout << "Setting roll camera exposure to "
+                                  << (int)current_settings.R_exposure << " us\n";
+                        save_settings();
+                        error_code = 0;
+                    } else {
+                        error_code = ACK_NOACTION;
+                    }
                     break;
                 case KEY_CAMERA_SEND_LAST: //Send latest image
                     TRANSMIT_NEXT_R_IMAGE = true;
