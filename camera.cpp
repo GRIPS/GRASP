@@ -1,6 +1,6 @@
 #define SAVE_1_OF_EVERY_N 10
 
-#define TIMEOUT1 5
+#define TIMEOUT1 100
 #define TIMEOUT2 60
 
 #define PY_CAM_ID 158434
