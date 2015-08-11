@@ -5,7 +5,7 @@
 
 //Sleep settings (microseconds)
 #define USLEEP_KILL            3000000 // how long to wait before terminating threads
-#define USLEEP_TM_SEND            5000 // period for popping off the telemetry queue
+#define USLEEP_TM_SEND            1000 // period for popping off the telemetry queue
 #define USLEEP_UDP_LISTEN         1000 // safety measure in case UDP listening is changed to non-blocking
 #define USLEEP_MAIN               5000 // period for checking for new commands in the queue
 #define USLEEP_IRS              100000 // cadence for checking IR sensor
@@ -105,6 +105,7 @@ float temp_py = 0, temp_roll = 0, temp_mb = 0;
 char ip_tm[20];
 
 // global mode variables
+bool MODE_AUTOMATIC = false; //used by camera main
 bool MODE_COMPRESS = false; //used by camera main
 bool MODE_MOCK = false; //used by camera main
 bool MODE_NETWORK = false;
@@ -890,6 +891,10 @@ int main(int argc, char *argv[])
         if(argv[i][0] == '-') {
             for(int j = 1; argv[i][j] != 0; j++) {
                 switch(argv[i][j]) {
+                    case 'a':
+                        std::cout << "Automatic mode\n";
+                        MODE_AUTOMATIC = true;
+                        break;
                     case 'c':
                         std::cout << "Compress mode\n";
                         MODE_COMPRESS = true;
@@ -925,6 +930,7 @@ int main(int argc, char *argv[])
                         break;
                     case '?':
                         std::cout << "Command-line options:\n";
+                        std::cout << "-a      Automatically transmit images at the science-packet cadence\n";
                         std::cout << "-c      Use Rice compression when saving FITS files\n";
                         std::cout << "-i<ip>  Send telemetry packets to this IP (instead of the FC's IP)\n";
                         std::cout << "-m      Use mock images instead of real images\n";

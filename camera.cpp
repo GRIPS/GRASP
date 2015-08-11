@@ -762,13 +762,19 @@ void Process(tCamera *Camera)
 
     if(py) {
         if(TRANSMIT_NEXT_PY_IMAGE) {
-            transmit_image(val, im, imarr);
             TRANSMIT_NEXT_PY_IMAGE = false;
+            transmit_image(val, im, imarr);
+        }
+        if(MODE_AUTOMATIC && (py_image_counter == 1)) {
+            transmit_image(val, im, imarr);
         }
     } else {
         if(TRANSMIT_NEXT_R_IMAGE) {
-            transmit_image(val, im, imarr);
             TRANSMIT_NEXT_R_IMAGE = false;
+            transmit_image(val, im, imarr);
+        }
+        if(MODE_AUTOMATIC && (roll_image_counter == 1)) {
+            transmit_image(val, im, imarr);
         }
     }
     if(MODE_VERBOSE) {
