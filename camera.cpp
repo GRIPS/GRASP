@@ -816,10 +816,7 @@ void transmit_image(params &val, info &im, valarray<unsigned char> &imarr)
 
     ImagePacketQueue ipq;
 
-    // Sent in two halves so that each individual packet is not too large
-    ipq.add_partial_array(id, val.height, val.width, 0, val.height, 0, val.width / 2,
-                          (uint8_t *)&(imarr[0]), val.clock, false);
-    ipq.add_partial_array(id, val.height, val.width, 0, val.height, val.width / 2, val.width,
+    ipq.add_partial_array(id, val.height, val.width, 0, val.height, 0, val.width,
                           (uint8_t *)&(imarr[0]), val.clock, true);
 
     ImagePacket ip(NULL);
