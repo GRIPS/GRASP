@@ -774,6 +774,11 @@ void *IRSensorThread(void *threadargs)
                 old_trigger_time = new_trigger_time;
             }
         }
+
+        //Erase stale values of the rotation rate
+        if ((oeb_get_clock() - new_trigger_time) * 1e-7 > 60) {
+            grid_rotation_rate = -1;
+        }
     }
 
     printf("IRSensor thread #%ld exiting\n", tid);
