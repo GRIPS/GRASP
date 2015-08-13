@@ -57,11 +57,11 @@
 #define KEY_TM_CADENCE_HK        0xD1
 #define KEY_TM_CADENCE_A2D       0xD2
 #define KEY_TM_CADENCE_SCIENCE   0xD3
-#define KEY_LOAD_PARAMETERS      0xE0 //not yet implemented
+#define KEY_LOAD_PARAMETERS      0xE0
 #define KEY_RESTART_WORKERS      0xF0
 #define KEY_RESTART_ALL          0xF1
 #define KEY_EXIT                 0xF2
-#define KEY_SHUTDOWN             0xFF //not yet implemented
+#define KEY_SHUTDOWN             0xFF
 
 //ASP commands, camera-specific
 #define KEY_CAMERA_FPS           0x4
@@ -861,7 +861,9 @@ void cmd_process_command(CommandPacket &cp)
             g_running = 0;
             break;
         case KEY_SHUTDOWN:
-            std::cerr << "Graceful computer shutdown not yet implemented!\n";
+            kill_all_threads();
+            usleep(USLEEP_KILL);
+            system("shutdown -h now");
             break;
         default:
             start_thread(CommandHandlerThread, &tdata);
