@@ -445,10 +445,11 @@ void *CommandListenerThread(void *threadargs)
 
     while(!stop_message[tid])
     {
-        unsigned int packet_length;
+        int packet_length;
 
         usleep_force(USLEEP_UDP_LISTEN);
         packet_length = comReceiver.listen( );
+        if (packet_length <= 0) continue;
         printf("CommandListenerThread: %i bytes, ", packet_length);
         uint8_t *packet;
         packet = new uint8_t[packet_length];
