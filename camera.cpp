@@ -277,6 +277,10 @@ void CameraEventCB(void* Context, tPvInterface Interface, tPvLinkEvent Event,
         default:
             break;
     }
+
+    //If a camera has been plugged in or unplugged since cameras have been grabbed,
+    //the main function should be stopped
+    g_running_camera_main = 0;
 }
 // __________________________________________________________________________________________end
 
@@ -308,6 +312,8 @@ bool CameraGrab()
     }
 
     NUMOFCAMERAS = i;
+
+    g_running_camera_main = 1;
 
     return i > 0;
 }

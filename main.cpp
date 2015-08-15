@@ -793,7 +793,10 @@ void *CameraMainThread(void *threadargs)
     long tid = (long)((struct Thread_data *)threadargs)->thread_id;
     printf("CameraMain thread #%ld!\n", tid);
 
-    camera_main(); // monitors g_running directly
+    while(!stop_message[tid])
+    {
+        camera_main();
+    }
 
     printf("CameraMain thread #%ld exiting\n", tid);
     started[tid] = false;
@@ -881,7 +884,6 @@ void start_all_workers()
     start_thread(TelemetrySenderThread, NULL);
     start_thread(IRSensorThread, NULL);
 
-    g_running_camera_main = 1;
     if (!MODE_UNCONNECTED) start_thread(CameraMainThread, NULL);
 }
 
