@@ -11,7 +11,7 @@ CXXFLAGS = -Inetwork -Idmm -Wall -pthread -I$(INC_DIR) $(FLAGS) -I$(CCfits)
 
 default: main
 
-all: program main
+all: program main quick playback
 
 #Variables for Nicole's executable
 EXE = grasp
@@ -21,7 +21,7 @@ clean:
 	make -C network clean
 	rm -f $(EXE)
 	rm -f *.o
-	rm -f main quick
+	rm -f main quick playback
 
 program:  $(SOURCES)
 	$(CC)  $(RPATH) $(TARGET) $(CFLAGS) $(SOURCES) -g -o $(EXE) $(SOLIB) $(PVLIB)  -I$(CCfits) -I$(cfitsio) -I$(cfitsiolib) -L$(CCfitslib) -lCCfits $(IMLIB)
@@ -30,6 +30,11 @@ install:
 	cp -f $(EXE) $(BIN_DIR)
 
 quick: quick.o
+	make -C network all
+	$(CC) -o $@ $^ network/*.o -pthread
+
+playback: playback.o
+	make -C network all
 	$(CC) -o $@ $^ network/*.o -pthread
 
 dmm.o: dmm/dmm.c dmm/dmm.h
