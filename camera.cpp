@@ -766,20 +766,17 @@ void Process(tCamera *Camera)
     }
     if(MODE_TIMING) cout << "  Analysis took " << stopwatch(watch) << " us\n";
 
+    if(MODE_AUTOMATIC && ((Camera->pcount % Camera->Rate) == 0)) {
+        transmit_image(val, im, imarr);
+    }
     if(py) {
         if(TRANSMIT_NEXT_PY_IMAGE) {
             TRANSMIT_NEXT_PY_IMAGE = false;
             transmit_image(val, im, imarr);
         }
-        if(MODE_AUTOMATIC && (py_image_counter == 1)) {
-            transmit_image(val, im, imarr);
-        }
     } else {
         if(TRANSMIT_NEXT_R_IMAGE) {
             TRANSMIT_NEXT_R_IMAGE = false;
-            transmit_image(val, im, imarr);
-        }
-        if(MODE_AUTOMATIC && (roll_image_counter == 1)) {
             transmit_image(val, im, imarr);
         }
     }
