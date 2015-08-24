@@ -5,15 +5,24 @@ GRips ASPect code
 
 Dependencies
 ------------
-When setting up this code on different computers
+### `cfitsio`
+```
+./configure --enable-reentrant --prefix=/usr/local
+make
+make install
+```
 
-0. Download and install AVT PVAPI, CCfits and cfitsio. 
+### `CCfits`
+```
+export CXXFLAGS="$CXXFLAGS -D_REENTRANT=1"
+export LIBS="$LIBS -lpthread"
+./configure --with-cfitsio=/usr/local
+make
+make install
+```
 
-1. Include the AVT PvAPI ARCH file in the location of the GRASP. This file is not inlcuded in the repository, copy from the AVT download and modify it to fit the filepaths to AVT.
-
-2. The way CCfits and cfitsio is set-up on computers may differ, change the includes in the Makefile, not the ARCH file
-
-3. ld linker had some issues finding the libCCfits.so.0 so its copied into the GRASP working directory locally, but not in the repository
+### AVT PvAPI
+The `ARCH` file assumes that the SDK can be found in a directory called `AVT GigE SDK` at the same level as the repository directory.  The actual library, `libPvAPI.so`, may need to be copied into the repository directory.
 
 Installation
 ------------
@@ -27,3 +36,6 @@ Then, to actually update the submodule, you need to call:
 
 You should not actually edit any of the files in the `network` subdirectory, because they belong to the other repository.
 
+Execution
+---------
+`main` needs to be run with root privileges.  `main -?` shows available command-line options.

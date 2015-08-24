@@ -1,6 +1,9 @@
 *.o
+*.fits
 
 dv??
 grasp
 main
-fake_tm
+quick
+
+table.255
