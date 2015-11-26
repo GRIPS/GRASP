@@ -711,7 +711,7 @@ void Process(tCamera *Camera)
     if(Camera->WantToSave) {
         char timestamp[14];
         struct tm *capturetime;
-        capturetime = localtime(&Camera->ClockPC[localIndex].tv_sec);
+        capturetime = gmtime(&Camera->ClockPC[localIndex].tv_sec);
         strftime(timestamp, 14, "%y%m%d_%H%M%S", capturetime);
 
         strftime(directory, 128, "images/%Y%m%d_%H", capturetime);
