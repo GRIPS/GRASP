@@ -20,6 +20,7 @@
 #include <cstdlib>
 #include <sys/time.h>
 #include <sys/syscall.h>
+#include <sys/stat.h>
 #include <fstream>
 #include <errno.h>
 #include <unistd.h>
@@ -703,14 +704,24 @@ void Process(tCamera *Camera)
         roll_image_counter++;
     }
 
+    char directory[128];
     char filename[128];
+    struct stat st = {0};
+
     if(Camera->WantToSave) {
         char timestamp[14];
         struct tm *capturetime;
         capturetime = localtime(&Camera->ClockPC[localIndex].tv_sec);
         strftime(timestamp, 14, "%y%m%d_%H%M%S", capturetime);
+
+        strftime(directory, 128, "images/%Y%m%d_%H", capturetime);
+        // Make the appropriate directory if it doesn't exist
+        if (stat(directory, &st) == -1) {
+            mkdir(directory, 0755);
+        }
+
         sprintf(filename, "%s/%s_%s_%06ld_%012lx.fits",
-                "images", //FIXME: flat storage will become unwieldy!
+                directory,
                 (py ? "py" : "r"), timestamp,
                 Camera->ClockPC[localIndex].tv_nsec/1000l,
                 Camera->ClockOEB[localIndex]);
