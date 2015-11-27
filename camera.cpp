@@ -776,6 +776,9 @@ void Process(tCamera *Camera)
     if(MODE_TIMING) cout << (py ? "Pitch-yaw" : "Roll")
                          << " image ready in " << stopwatch(watch) << " us\n";
 
+    // Only proceed with analysis on one frame each second (per camera)
+    if((Camera->pcount % Camera->Rate) == 0) {
+
     if(MODE_TIMING) stopwatch(watch);
     if(py) {
         analyzePY(im, val, imarr);
@@ -784,7 +787,7 @@ void Process(tCamera *Camera)
     }
     if(MODE_TIMING) cout << "  Analysis took " << stopwatch(watch) << " us\n";
 
-    if(MODE_AUTOMATIC && ((Camera->pcount % Camera->Rate) == 0)) {
+    if(MODE_AUTOMATIC) {
         transmit_image(val, im, imarr);
     }
     if(py) {
@@ -818,6 +821,8 @@ void Process(tCamera *Camera)
     if(py && val.drawline) {
         drawline(imarr, val, im);
     }
+
+    } // end of analysis
 
     //3. save?
     if(Camera->WantToSave) {
