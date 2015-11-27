@@ -317,6 +317,12 @@ void *TelemetryHousekeepingThread(void *threadargs)
         uint8_t status_bitfield = 0;
         bitwrite(&status_bitfield, 0, 1, CAMERAS[0].Handle != NULL);
         bitwrite(&status_bitfield, 1, 1, CAMERAS[1].Handle != NULL);
+        // bit 2 is connection to IR sensor
+        // bit 3 is TBD
+        bitwrite(&status_bitfield, 4, 1, CAMERAS[0].WantToSave);
+        bitwrite(&status_bitfield, 5, 1, CAMERAS[1].WantToSave);
+        // bit 6 is TBD
+        // bit 7 is TBD
         tp << status_bitfield << latest_command_key;
 
         tp << (int16_t)(temp_py * 100) << (int16_t)(temp_roll * 100) << (int16_t)(temp_mb * 100);
@@ -380,6 +386,11 @@ void *TelemetryScienceThread(void *threadargs)
         bitwrite(&quality_bitfield, 0, 1, PY_ANALYSIS.there[0]);
         bitwrite(&quality_bitfield, 1, 1, PY_ANALYSIS.there[1]);
         bitwrite(&quality_bitfield, 2, 1, PY_ANALYSIS.there[2]);
+        // bit 3 is fiducial lock
+        bitwrite(&quality_bitfield, 4, 1, R_ANALYSIS.good_contrast);
+        bitwrite(&quality_bitfield, 5, 1, R_ANALYSIS.good_black_level);
+        // bit 6 is PY-determined rotating
+        bitwrite(&quality_bitfield, 7, 1, grid_rotation_rate > 5);
         tp << quality_bitfield;
 
         uint8_t count1 = py_image_counter;

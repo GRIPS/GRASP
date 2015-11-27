@@ -437,6 +437,9 @@ bool analyzeR(info &im, params val, valarray<unsigned char> &imarr)
         im.stdev[i] = sqrt((total_squares[i] - n * im.mean[i] * im.mean[i]) / (n - 1));
     }
 
+    im.good_contrast = (im.mean[0] - 3 * im.stdev[0]) + (im.mean[2] - 3 * im.stdev[2]) > 2 * (im.mean[1] + 3 * im.stdev[1]);
+    im.good_black_level = (im.mean[1] + 3 * im.stdev[1]) < 16;
+
     return true;
 }
 // __________________________________________________________________________________________end
@@ -450,6 +453,8 @@ void reportR(params val, info im)
     cout << val.width << "x" << val.height << endl;
     cout<<"mean: "<<im.mean[0]<<", "<<im.mean[1]<<" , "<<im.mean[2]<<endl;
     cout<<"stdev: "<<im.stdev[0]<<", "<<im.stdev[1]<<" , "<<im.stdev[2]<<endl;
+    cout<<"contrast is "<< (im.good_contrast ? "GOOD" : "BAD") <<endl;
+    cout<<"black is "<< (im.good_black_level ? "GOOD" : "BAD") <<endl;
     cout<<"\n";
 }
 // __________________________________________________________________________________________end

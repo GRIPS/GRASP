@@ -28,6 +28,7 @@ struct info            //info are data products
     // Roll image analysis
     float mean[3]; // left/middle/right strips
     float stdev[3]; // left/middle/right strips
+    bool good_contrast, good_black_level;
 };
 
 struct params        //parameters control the program and define variables
