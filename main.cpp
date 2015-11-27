@@ -47,10 +47,10 @@
 
 //ASP commands
 #define KEY_SET_CLOCK_FOR_SYNC   0x99
-#define KEY_PYC_OFF              0xA0 //not yet implemented
-#define KEY_PYC_ON               0xA1 //not yet implemented
-#define KEY_RC_OFF               0xB0 //not yet implemented
-#define KEY_RC_ON                0xB1 //not yet implemented
+#define KEY_PYC_SAVE_OFF         0xA0
+#define KEY_PYC_SAVE_ON          0xA1
+#define KEY_RC_SAVE_OFF          0xB0
+#define KEY_RC_SAVE_ON           0xB1
 #define KEY_IRS_OFF              0xC0 //not yet implemented
 #define KEY_IRS_ON               0xC1 //not yet implemented
 #define KEY_TM_SEND_SETTINGS     0xD0
@@ -539,13 +539,21 @@ void *CommandHandlerThread(void *threadargs)
                     oeb_set_clock(value);
                     error_code = 0;
                     break;
-                case KEY_PYC_OFF: //Turn OFF pitch-yaw camera
+                case KEY_PYC_SAVE_OFF: //Turn OFF saving of pitch-yaw images
+                    CAMERAS[0].WantToSave = false;
+                    error_code = 0;
                     break;
-                case KEY_PYC_ON: //Turn ON pitch-yaw camera
+                case KEY_PYC_SAVE_ON: //Turn ON saving of pitch-yaw images
+                    CAMERAS[0].WantToSave = true;
+                    error_code = 0;
                     break;
-                case KEY_RC_OFF: //Turn OFF roll camera
+                case KEY_RC_SAVE_OFF: //Turn OFF saving of roll images
+                    CAMERAS[1].WantToSave = false;
+                    error_code = 0;
                     break;
-                case KEY_RC_ON: //Turn ON roll camera
+                case KEY_RC_SAVE_ON: //Turn ON saving of roll images
+                    CAMERAS[1].WantToSave = true;
+                    error_code = 0;
                     break;
                 case KEY_IRS_OFF: //Turn OFF IR sensor
                     break;

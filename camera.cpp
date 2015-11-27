@@ -1,4 +1,4 @@
-#define SAVE_1_OF_EVERY_N 10
+#define SAVE_1_OF_EVERY_N 1
 
 #define TIMEOUT1 125
 #define TIMEOUT2 60
