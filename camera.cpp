@@ -86,9 +86,9 @@ bool is_pyc(tCamera *Camera);
 int create_timer();
 int arm_timer();
 int disarm_timer();
-int next_camera();
 
-void spawn_thread(int x);
+void tick_handler(int x);
+void spawn_thread(tCamera *Camera);
 void *snap_thread(void *cam);
 void handle_wait(tCamera *Camera, tPvErr &errCode, int timeout2);
 void handle_timeout(tCamera *Camera);
@@ -120,7 +120,7 @@ int camera_main()
     //create handler
     struct sigaction act, oldact;
     memset(&act, 0, sizeof(struct sigaction));
-    act.sa_handler = spawn_thread;
+    act.sa_handler = tick_handler;
     sigaction(10, &act, &oldact);
 
     memset(&PY_ANALYSIS, 0, sizeof(struct info));
@@ -401,9 +401,9 @@ int create_timer()
    ========================================================================================== */
 int arm_timer()
 {
-    TICKS_PER_SECOND = 0;
+    TICKS_PER_SECOND = 1;
     for(unsigned int i = 0; i < NUMOFCAMERAS; i++) {
-        TICKS_PER_SECOND += CAMERAS[i].Rate;
+        TICKS_PER_SECOND *= CAMERAS[i].Rate;
     }
     cout << "This is the ticks per second: " << TICKS_PER_SECOND << "\n";
 
@@ -513,16 +513,21 @@ void CameraStop(tCamera *Camera)
 
 
 /*=============================================================================================
-  Determines which camera to snap next
-  Currently assumes two cameras and alternates between them until one camera is "done"
-  Returns 0 or 1
+  Handle ticks by calling the thread spawner at the appropriate multiples
   ========================================================================================== */
-int next_camera()
+void tick_handler(int x)
 {
-    if(CURRENT_TICK < 2 * MIN(CAMERAS[0].Rate, CAMERAS[1].Rate)) {
-        return CURRENT_TICK % 2;
+    switch(NUMOFCAMERAS) {
+        case 1:
+            spawn_thread(&CAMERAS[0]);
+        case 2:
+        default:
+            if((CURRENT_TICK % CAMERAS[1].Rate) == 0) spawn_thread(&CAMERAS[0]);
+            if((CURRENT_TICK % CAMERAS[0].Rate) == 0) spawn_thread(&CAMERAS[1]);
     }
-    return CAMERAS[0].Rate > CAMERAS[1].Rate ? 0 : 1;
+
+    //update CURRENT_TICK
+    CURRENT_TICK = ((CURRENT_TICK + 1) % TICKS_PER_SECOND);
 }
 // _________________________________________________________________________________________end
 
@@ -530,13 +535,9 @@ int next_camera()
 /*=============================================================================================
   spawn threads for snapping/processing
   ========================================================================================== */
-void spawn_thread(int x)
+void spawn_thread(tCamera *Camera)
 {
     if(!PAUSEPROGRAM && g_running_camera_main) {
-        //which camera snaps?
-        tCamera *Camera = &CAMERAS[next_camera()];
-
-        //spawn thread based on camera and idx
         int thread_err;
         pthread_attr_t attr;                                            //attribute object
         pthread_attr_init(&attr);
@@ -556,9 +557,6 @@ void spawn_thread(int x)
         //update thread and buffer indexes
         Camera->BufferIndex = Camera->idx; //the active buffer = this thread buffer
         Camera->idx = ((Camera->idx + 1) % FRAMESCOUNT);
-
-        //update CURRENT_TICK
-        CURRENT_TICK = ((CURRENT_TICK + 1) % TICKS_PER_SECOND);
     }
 }
 // _________________________________________________________________________________________end
