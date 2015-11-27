@@ -34,7 +34,9 @@ struct tCamera
     unsigned long    Gain;
 
     timespec         ClockPC[FRAMESCOUNT];
-    uint64_t         ClockOEB[FRAMESCOUNT]; //from the odds & ends board
+    uint64_t         ClockOEB1[FRAMESCOUNT]; //from the odds & ends board
+    uint64_t         ClockOEB2[FRAMESCOUNT]; //from the odds & ends board
+    uint64_t         ClockTrigger[FRAMESCOUNT]; //from the odds & ends board
 
     tPvFrame         Frames[FRAMESCOUNT];
     //valarray<unsigned char> imarr[FRAMESCOUNT]; //each valarray is sized 0, resized in setup

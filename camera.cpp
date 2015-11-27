@@ -593,11 +593,18 @@ void *snap_thread(void *cam)
             clock_gettime(CLOCK_REALTIME, &Camera->ClockPC[Camera->BufferIndex]);
             Camera->snapcount++;
             Camera->waitFlag= true;
+
+            Camera->ClockOEB1[Camera->BufferIndex] = oeb_get_clock();
+
             if(PvCommandRun(Camera->Handle, "FrameStartTriggerSoftware") != ePvErrSuccess) {
                 cout<<"Trigger Software Error: ";
                 PrintError(errCode);
             }
+
             errCode = PvCaptureWaitForFrameDone(Camera->Handle, &(Camera->Frames[Camera->BufferIndex]), TIMEOUT1);
+
+            Camera->ClockOEB2[Camera->BufferIndex] = oeb_get_clock();
+
             handle_wait(Camera, errCode, TIMEOUT2); //checks and updates waitflag and errCode
 
             //Process: if done waiting, no timeout, successful frame & non-zero bitdepth
@@ -697,10 +704,10 @@ void Process(tCamera *Camera)
     unsigned int localIndex = Camera->BufferIndex;
 
     if(py) {
-        Camera->ClockOEB[localIndex] = oeb_get_pyc();
+        Camera->ClockTrigger[localIndex] = oeb_get_pyc();
         py_image_counter++;
     } else {
-        Camera->ClockOEB[localIndex] = oeb_get_rc();
+        Camera->ClockTrigger[localIndex] = oeb_get_rc();
         roll_image_counter++;
     }
 
@@ -724,7 +731,7 @@ void Process(tCamera *Camera)
                 directory,
                 (py ? "py" : "r"), timestamp,
                 Camera->ClockPC[localIndex].tv_nsec/1000l,
-                Camera->ClockOEB[localIndex]);
+                Camera->ClockTrigger[localIndex]);
     }
 
     if(MODE_TIMING) stopwatch(watch);
@@ -738,7 +745,7 @@ void Process(tCamera *Camera)
     params val;
     init_params(val, Camera->FrameWidth, Camera->FrameHeight);
     val.UID = Camera->UID;
-    val.clock = Camera->ClockOEB[localIndex];
+    val.clock = Camera->ClockTrigger[localIndex];
 
     //timeval t;
     //2. analyze live or test image?
@@ -863,6 +870,8 @@ bool saveim(tCamera *Camera, valarray<unsigned char> &imarr, const char* filenam
     std::auto_ptr<FITS> pFits(0);
     //std::valarray<unsigned char> imarr((char*)Camera->Frames[j].ImageBuffer, nelements);
 
+    unsigned int localIndex = Camera->BufferIndex;
+
     //for running loop tests
     remove(filename);
 
@@ -883,8 +892,15 @@ bool saveim(tCamera *Camera, valarray<unsigned char> &imarr, const char* filenam
         pFits->pHDU().addKey("Save Count",(int)Camera->savecount, "Num of Saved Images");
         pFits->pHDU().addKey("Snap Count",(int)Camera->snapcount, "Num of SNAPS");
         pFits->pHDU().addKey("Exposure",(long)Camera->ExposureLength, "for cameanalyzera");
-        pFits->pHDU().addKey("Gain",(long)Camera->Gain, "Gain (dB)");
+        pFits->pHDU().addKey("Gain",(int)Camera->Gain, "Gain (dB)");
+        pFits->pHDU().addKey("Rate",(int)Camera->Rate, "Number of frames per second");
         pFits->pHDU().addKey("filename", filename, "Name of the file");
+
+        pFits->pHDU().addKey("PC_SEC", (long)Camera->ClockPC[localIndex].tv_sec, "PC time (seconds)");
+        pFits->pHDU().addKey("PC_NSEC", (long)Camera->ClockPC[localIndex].tv_nsec, "PC time (nanoseconds)");
+        pFits->pHDU().addKey("GT_TRIG", (long)Camera->ClockTrigger[localIndex], "Gondola time of camera trigger pulse");
+        pFits->pHDU().addKey("GT_OEB1", (long)Camera->ClockOEB1[localIndex], "Gondola time before snap");
+        pFits->pHDU().addKey("GT_OEB2", (long)Camera->ClockOEB2[localIndex], "Gondola time after snap");
 
         //switch to make the appropriate ascii tables for PY or H from their info structs
         //pFits->pHDU().addKey("xp", im.xp, "x coordinates");
