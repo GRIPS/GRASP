@@ -399,14 +399,14 @@ void *TelemetryScienceThread(void *threadargs)
         py_image_counter = 0;
         roll_image_counter = 0;
 
-        uint8_t num_fiducials = 0;
+        uint8_t num_fiducials = PY_ANALYSIS.nfid;
         tp << num_fiducials;
 
         float offset_pitch = 0, uncert_pitch = 0;
         float offset_yaw = 0, uncert_yaw = 0;
         tp << offset_pitch << uncert_pitch << offset_yaw << uncert_yaw;
 
-        float new_grid_orientation = 0;
+        float new_grid_orientation = PY_ANALYSIS.theta;
         float delta_grid_orientation = new_grid_orientation - old_grid_orientation;
         if (delta_grid_orientation < 0) delta_grid_orientation += 360.;
         tp << new_grid_orientation << delta_grid_orientation;
@@ -427,11 +427,13 @@ void *TelemetryScienceThread(void *threadargs)
             tp << (uint16_t)(PY_ANALYSIS.xp[i] * 10) << (uint16_t)(PY_ANALYSIS.yp[i] * 10);
         }
 
-        uint16_t fiducial_x[4], fiducial_y[4];
-        memset(fiducial_x, 0, 4 * sizeof(uint16_t));
-        memset(fiducial_y, 0, 4 * sizeof(uint16_t));
         for (int i = 0; i < 4; i++) {
-            tp << (uint16_t)(fiducial_x[i] * 10) << (uint16_t)(fiducial_y[i] * 10);
+            if(num_fiducials > 1) {
+                int index = ((tm_frame_sequence_number + i) % num_fiducials);
+                tp << (uint16_t)(PY_ANALYSIS.xfid[index] * 10) << (uint16_t)(PY_ANALYSIS.yfid[index] * 10);
+            } else {
+                tp << (uint16_t)0 << (uint16_t)0;
+            }
         }
 
         pthread_mutex_unlock(&mutexAnalysis);

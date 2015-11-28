@@ -6,8 +6,11 @@ CCfits=/usr/local/include/CCfits
 cfitsio=/usr/local/include
 #cfitsiolib=~/cfitsio
 
+I_OPENCV = -I/usr/include/opencv2
+L_OPENCV = -lopencv_core -lopencv_imgproc
+
 #Used for implicit compiling of C++ files
-CXXFLAGS = -Inetwork -Idmm -Wall -pthread -I$(INC_DIR) $(FLAGS) -I$(CCfits)
+CXXFLAGS = -Inetwork -Idmm -Wall -pthread -I$(INC_DIR) $(FLAGS) -I$(CCfits) $(I_OPENCV)
 
 default: main
 
@@ -42,4 +45,4 @@ dmm.o: dmm/dmm.c dmm/dmm.h
 
 main: main.o oeb.o dmm.o camera.o analysis.o Image.o settings.o
 	make -C network all
-	$(CC) -o $@ $^ network/*.o -pthread -L$(CCfitslib) -lCCfits $(PVLIB) $(SOLIB) $(RPATH)
+	$(CC) -o $@ $^ network/*.o -pthread -L$(CCfitslib) -lCCfits $(L_OPENCV) $(PVLIB) $(SOLIB) $(RPATH)
