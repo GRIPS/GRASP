@@ -163,6 +163,9 @@ void *IRSensorThread(void *threadargs);
 
 void *CameraMainThread(void *threadargs);
 
+void writeCurrentUT(char *buffer);
+void printLogTimestamp();
+
 template <class T>
 bool set_if_different(T& variable, T value); //returns true if the value is different
 
@@ -175,6 +178,26 @@ void sig_handler(int signum)
         g_running = 0;
         g_running_camera_main = 0;
     }
+}
+
+void writeCurrentUT(char *buffer)
+{
+    time_t now;
+    time(&now);
+    struct tm *now_tm;
+    now_tm = gmtime(&now);
+    strftime(buffer, 14, "%y%m%d_%H%M%S", now_tm);
+}
+
+void printLogTimestamp()
+{
+    time_t now;
+    time(&now);
+    struct tm *now_tm;
+    now_tm = gmtime(&now);
+    char timestamp[23];
+    strftime(timestamp, 23, "%Y-%m-%d %H:%M:%S UT", now_tm);
+    printf("[%s] OEB:%ld\n", timestamp, oeb_get_clock());
 }
 
 template <class T>
@@ -472,6 +495,7 @@ void *CommandListenerThread(void *threadargs)
         usleep_force(USLEEP_UDP_LISTEN);
         packet_length = comReceiver.listen( );
         if (packet_length <= 0) continue;
+        printLogTimestamp();
         printf("CommandListenerThread: %i bytes, ", packet_length);
         uint8_t *packet;
         packet = new uint8_t[packet_length];
@@ -548,22 +572,27 @@ void *CommandHandlerThread(void *threadargs)
                 case KEY_SET_CLOCK_FOR_SYNC: //Set clock value to sync to
                     value &= 0xFFFFFFFFFFFF; //keep only 6 bytes
                     oeb_set_clock(value);
+                    std::cout << "Setting clock value to sync to " << value << std::endl;
                     error_code = 0;
                     break;
                 case KEY_PYC_SAVE_OFF: //Turn OFF saving of pitch-yaw images
                     CAMERAS[0].WantToSave = false;
+                    std::cout << "Turning OFF saving of pitch-yaw images\n";
                     error_code = 0;
                     break;
                 case KEY_PYC_SAVE_ON: //Turn ON saving of pitch-yaw images
                     CAMERAS[0].WantToSave = true;
+                    std::cout << "Turning ON saving of pitch-yaw images\n";
                     error_code = 0;
                     break;
                 case KEY_RC_SAVE_OFF: //Turn OFF saving of roll images
                     CAMERAS[1].WantToSave = false;
+                    std::cout << "Turning OFF saving of roll images\n";
                     error_code = 0;
                     break;
                 case KEY_RC_SAVE_ON: //Turn ON saving of roll images
                     CAMERAS[1].WantToSave = true;
+                    std::cout << "Turning ON saving of roll images\n";
                     error_code = 0;
                     break;
                 case KEY_IRS_OFF: //Turn OFF IR sensor
@@ -572,6 +601,7 @@ void *CommandHandlerThread(void *threadargs)
                     break;
                 case KEY_TM_SEND_SETTINGS: //Request settings telemetry packet
                     queue_settings_tmpacket();
+                    std::cout << "Sending settings telemetry packet\n";
                     error_code = 0;
                     break;
                 case KEY_TM_CADENCE_HK: //Set cadence of housekeeping packet
@@ -685,6 +715,7 @@ void *CommandHandlerThread(void *threadargs)
                     break;
                 case KEY_CAMERA_SEND_LAST: //Send latest image
                     TRANSMIT_NEXT_PY_IMAGE = true;
+                    std::cout << "Sending latest pitch-yaw image\n";
                     error_code = 0;
                     break;
                 case KEY_CAMERA_SEND_SPECIFIC: //Send specific image
@@ -737,6 +768,7 @@ void *CommandHandlerThread(void *threadargs)
                     break;
                 case KEY_CAMERA_SEND_LAST: //Send latest image
                     TRANSMIT_NEXT_R_IMAGE = true;
+                    std::cout << "Sending latest roll image\n";
                     error_code = 0;
                     break;
                 case KEY_CAMERA_SEND_SPECIFIC: //Send specific image
@@ -825,6 +857,8 @@ void *CameraMainThread(void *threadargs)
 
     while(!stop_message[tid])
     {
+        printLogTimestamp();
+        printf("Starting camera_main()\n");
         camera_main();
     }
 
@@ -996,6 +1030,8 @@ int main(int argc, char *argv[])
     // initialize odds & ends board
     if(oeb_init() != 0) return 1;
 
+    printLogTimestamp();
+
     // Load settings from previous run, or load table 0
     if(load_settings(table_to_load) == 0) {
         if(table_to_load == 255) {
@@ -1044,6 +1080,7 @@ int main(int argc, char *argv[])
     }
 
     /* Last thing that main() should do */
+    printLogTimestamp();
     printf("Quitting and cleaning up.\n");
 
     /* wait for threads to finish */
@@ -1052,6 +1089,9 @@ int main(int argc, char *argv[])
     pthread_mutex_destroy(&mutexAnalysis);
 
     save_settings();
+
+    printLogTimestamp();
+    printf("Done\n");
 
     oeb_uninit();
 
