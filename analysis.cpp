@@ -167,6 +167,25 @@ bool fancy_stuff(valarray<unsigned char> imarr, params& val, info& im)
 
     cv::Mat full_frame(val.height, val.width, CV_8UC1, &imarr[0]);
 
+    // calculate histogram
+    cv::Mat hist;
+    int size[] = {256};
+    float range[] = {0, 256};
+    const float *ranges[] = {range};
+    cv::calcHist(&full_frame, 1, //just one matrix
+                 0,       //just the first channel
+                 cv::Mat(), //no mask
+                 hist,      //output histogram
+                 1, size,   //number of dimensions and bins
+                 ranges,  //range of histogram
+                 true,      //uniform?
+                 false);    //accumulate?
+
+    // Normalize histogram
+    for(int bin = 0; bin < 255; bin++) {
+        im.histogram[bin] = hist.at<float>(bin) / (val.width * val.height);
+    }
+
     cv::Mat coarse_frame(val.height / 10, val.width / 10, CV_8UC1);
     for(int i = 0; i < coarse_frame.rows; i++) {
         for(int j = 0; j < coarse_frame.cols; j++) {
