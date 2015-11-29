@@ -520,6 +520,7 @@ void tick_handler(int x)
     switch(NUMOFCAMERAS) {
         case 1:
             spawn_thread(&CAMERAS[0]);
+            break;
         case 2:
         default:
             if((CURRENT_TICK % CAMERAS[1].Rate) == 0) spawn_thread(&CAMERAS[0]);
