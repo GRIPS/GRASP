@@ -138,7 +138,7 @@ bool fancy_stuff(valarray<unsigned char> imarr, params& val, info& im)
 {
     static bool templates_initialized = false;
     static cv::Mat template_sun_fine(141, 141, CV_32FC1);
-    static cv::Mat template_sun_coarse(15, 15, CV_32FC1);
+    static cv::Mat kernel_sun_coarse(15, 15, CV_32FC1);
     static cv::Mat template_fiducial(11, 11, CV_32FC1);
 
     // Generate the templates if they haven't already been generated
@@ -152,7 +152,7 @@ bool fancy_stuff(valarray<unsigned char> imarr, params& val, info& im)
         for(int i = -7; i <= 7; i++) {
             for(int j = -7; j <= 7; j++) {
                 float temp = 1 - cosh(sqrt(i * i + j * j)) / 200;
-                template_sun_coarse.at<float>(i + 7, j + 7) = MAX(temp, 0);
+                kernel_sun_coarse.at<float>(i + 7, j + 7) = MAX(temp, -2);
             }
         }
         for(int i = -5; i <= 5; i++) {
@@ -194,7 +194,7 @@ bool fancy_stuff(valarray<unsigned char> imarr, params& val, info& im)
     }
 
     cv::Mat correlation(coarse_frame.rows, coarse_frame.cols, CV_32FC1);
-    cv::filter2D(coarse_frame, correlation, CV_32F, template_sun_coarse);
+    cv::filter2D(coarse_frame, correlation, CV_32F, kernel_sun_coarse);
     list<XYZ> coarse_suns = find_local_peaks(correlation, 1000); // FIXME: magic number!
 
     if(!coarse_suns.empty()) {
