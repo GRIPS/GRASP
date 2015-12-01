@@ -122,6 +122,10 @@ int camera_main()
     act.sa_handler = tick_handler;
     sigaction(10, &act, &oldact);
 
+    memset(CAMERAS, 0, MAX_CAMERAS * sizeof(tCamera));
+    CAMERAS[0].UID = PY_CAM_ID;
+    CAMERAS[1].UID = R_CAM_ID;
+
     memset(&PY_ANALYSIS, 0, sizeof(struct info));
     memset(&R_ANALYSIS, 0, sizeof(struct info));
 
@@ -292,17 +296,11 @@ void CameraEventCB(void* Context, tPvInterface Interface, tPvLinkEvent Event,
 bool CameraGrab()
 {
     //try PY camera
-    memset(&CAMERAS[0], 0, sizeof(tCamera));
-    if(!PvCameraOpenByAddr(inet_addr(IP1), ePvAccessMaster, &(CAMERAS[0].Handle))) {
-        CAMERAS[0].UID = PY_CAM_ID;
-    } else {
+    if(PvCameraOpenByAddr(inet_addr(IP1), ePvAccessMaster, &(CAMERAS[0].Handle)) != ePvErrSuccess) {
         cout<<"couldn't open PY camera\n";
     }
     //try R camera
-    memset(&CAMERAS[1], 0, sizeof(tCamera));
-    if(!PvCameraOpenByAddr(inet_addr(IP2), ePvAccessMaster, &(CAMERAS[1].Handle))) {
-        CAMERAS[1].UID = R_CAM_ID;
-    } else {
+    if(PvCameraOpenByAddr(inet_addr(IP2), ePvAccessMaster, &(CAMERAS[1].Handle)) != ePvErrSuccess) {
         cout<<"couldn't open R camera\n";
     }
 
@@ -519,7 +517,14 @@ void tick_handler(int x)
   ========================================================================================== */
 void spawn_thread(tCamera *Camera)
 {
-    if(!Camera->Handle) return;
+    if(!Camera->Handle) {
+        tPvCameraInfoEx pInfo;
+        if(PvCameraInfoEx(Camera->UID, &pInfo, sizeof(tPvCameraInfoEx)) == ePvErrSuccess) {
+            cout << "Camera is plugged in but not opened, so bailing out\n";
+            g_running_camera_main = 0;
+        }
+        return;
+    }
     if(!PAUSEPROGRAM && g_running_camera_main) {
         int thread_err;
         pthread_attr_t attr;                                            //attribute object
@@ -1099,19 +1104,21 @@ void queueErrorHandling(tCamera *Camera)
    ========================================================================================== */
 void CameraUnsetup(tCamera *Camera)
 {
-    printf("Preparing to unsetup camera with ID %lu\n", Camera->UID);
-    printf("\nClearing the queue.\n");
-    // Dequeue all the frames still queued (causes a block until dequeue finishes).
-    PvCaptureQueueClear(Camera->Handle);
-    // Close the camera.
-    printf("Closing the camera.\n");
-    PvCameraClose(Camera->Handle);
+    if(Camera->Handle) {
+        printf("Preparing to unsetup camera with ID %lu\n", Camera->UID);
+        printf("\nClearing the queue.\n");
+        // Dequeue all the frames still queued (causes a block until dequeue finishes).
+        PvCaptureQueueClear(Camera->Handle);
+        // Close the camera.
+        printf("Closing the camera.\n");
+        PvCameraClose(Camera->Handle);
 
-    // Delete the allocated buffer(s).
-    for(int i = 0; i < FRAMESCOUNT; i++)
-        delete [] (unsigned char*)Camera->Frames[i].ImageBuffer;
+        // Delete the allocated buffer(s).
+        for(int i = 0; i < FRAMESCOUNT; i++)
+            delete [] (unsigned char*)Camera->Frames[i].ImageBuffer;
 
-    Camera->Handle = NULL;
+        Camera->Handle = NULL;
+    }
 }
 // __________________________________________________________________________________________end
 
