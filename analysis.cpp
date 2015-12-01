@@ -208,7 +208,7 @@ bool fancy_stuff(valarray<unsigned char> imarr, params& val, info& im)
         for(list<XYZ>::iterator it = coarse_suns.begin(); it != coarse_suns.end(); ++it) {
             // Crop the full frame to around the Sun, with protection at the edges
             int anchor_x = MAX(MIN((*it).x * 10 + 5 - 80, full_frame.cols - 161), 0);
-            int anchor_y = MAX(MIN((*it).y * 10 + 5 - 80, full_frame.cols - 161), 0);
+            int anchor_y = MAX(MIN((*it).y * 10 + 5 - 80, full_frame.rows - 161), 0);
             cv::Mat sub_frame(full_frame,
                               cv::Range(anchor_y, anchor_y + 161),
                               cv::Range(anchor_x, anchor_x + 161));
