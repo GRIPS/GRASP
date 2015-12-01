@@ -1,7 +1,9 @@
 #ifndef _CAMERA_HPP_
 #define _CAMERA_HPP_
 
-#define MAXNUMOFCAMERAS 2
+#define MAX_CAMERAS 2
+#define IP1 "169.254.100.2"
+#define IP2 "169.254.200.2"
 
 #define FRAMESCOUNT 5
 
@@ -77,7 +79,7 @@ struct tCamera
 
 //global variables found in camera.cpp
 extern volatile bool TRANSMIT_NEXT_PY_IMAGE, TRANSMIT_NEXT_R_IMAGE;
-extern tCamera CAMERAS[MAXNUMOFCAMERAS];
+extern tCamera CAMERAS[MAX_CAMERAS];
 extern struct info PY_ANALYSIS, R_ANALYSIS;
 
 #endif

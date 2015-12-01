@@ -57,12 +57,11 @@ using namespace std; //the global namespace, CCfits used locally in saveim
 /* =============================================================================================
     Global Variables
    ========================================================================================== */
-unsigned long NUMOFCAMERAS = 0;        // Actual number of cameras detected.
 unsigned int TICKS_PER_SECOND; // Total number of ticks per second
 volatile unsigned int CURRENT_TICK = 0;
 bool PAUSEPROGRAM = false;
 volatile bool TRANSMIT_NEXT_PY_IMAGE = false, TRANSMIT_NEXT_R_IMAGE = false;
-tCamera CAMERAS[MAXNUMOFCAMERAS];
+tCamera CAMERAS[MAX_CAMERAS];
 timer_t TIMER; //timer identifier
 struct info PY_ANALYSIS, R_ANALYSIS;
 // __________________________________________________________________________________________end
@@ -137,16 +136,16 @@ int camera_main()
                 synchronize_settings();
                 // Set up cameras.
                 bool setupSuccess = true;
-                for(unsigned int i = 0; i < NUMOFCAMERAS; i++) {
-                    if(!CameraSetup(&CAMERAS[i]))
-                        setupSuccess = false;
+                for(unsigned int i = 0; i < MAX_CAMERAS; i++) {
+                    if(CAMERAS[i].Handle)
+                        setupSuccess &= CameraSetup(&CAMERAS[i]);
                 }
                 if(setupSuccess) {
                     // Start streaming from cameras.
                     bool startSuccess = true;
-                    for(unsigned int j = 0; j < NUMOFCAMERAS; j++) {
-                        if(!CameraStart(&CAMERAS[j]))
-                            startSuccess = false;
+                    for(unsigned int i = 0; i < MAX_CAMERAS; i++) {
+                        if(CAMERAS[i].Handle)
+                            startSuccess &= CameraStart(&CAMERAS[i]);
                     }
                     if(!startSuccess) {
                         printf("Failed to start streaming from cameras.\n");
@@ -161,8 +160,9 @@ int camera_main()
                     }
 
                     // Unsetup the cameras.
-                    for(unsigned int k = 0; k < NUMOFCAMERAS; k++) {
-                        CameraUnsetup(&CAMERAS[k]);
+                    for(unsigned int i = 0; i < MAX_CAMERAS; i++) {
+                        if(CAMERAS[i].Handle)
+                            CameraUnsetup(&CAMERAS[i]);
                     }
                 } else
                     printf("Failed to set up cameras.\n");
@@ -291,32 +291,24 @@ void CameraEventCB(void* Context, tPvInterface Interface, tPvLinkEvent Event,
    ========================================================================================== */
 bool CameraGrab()
 {
-    int i = 0;
-    const char* IP1 = "169.254.100.2";
-    const char* IP2 = "169.254.200.2";
-
-    //try 1st camera
-    memset(&CAMERAS[i], 0, sizeof(tCamera));
-    if(!PvCameraOpenByAddr(inet_addr(IP1), ePvAccessMaster, &(CAMERAS[i].Handle))) {
-        CAMERAS[i].UID = PY_CAM_ID;
-        i++;
+    //try PY camera
+    memset(&CAMERAS[0], 0, sizeof(tCamera));
+    if(!PvCameraOpenByAddr(inet_addr(IP1), ePvAccessMaster, &(CAMERAS[0].Handle))) {
+        CAMERAS[0].UID = PY_CAM_ID;
     } else {
         cout<<"couldn't open PY camera\n";
     }
-    //try 2nd camera
-    memset(&CAMERAS[i], 0, sizeof(tCamera));
-    if(!PvCameraOpenByAddr(inet_addr(IP2), ePvAccessMaster, &(CAMERAS[i].Handle))) {
-        CAMERAS[i].UID = R_CAM_ID;
-        i++;
+    //try R camera
+    memset(&CAMERAS[1], 0, sizeof(tCamera));
+    if(!PvCameraOpenByAddr(inet_addr(IP2), ePvAccessMaster, &(CAMERAS[1].Handle))) {
+        CAMERAS[1].UID = R_CAM_ID;
     } else {
         cout<<"couldn't open R camera\n";
     }
 
-    NUMOFCAMERAS = i;
-
     g_running_camera_main = 1;
 
-    return i > 0;
+    return (CAMERAS[0].Handle != NULL) || (CAMERAS[1].Handle != NULL);
 }
 // __________________________________________________________________________________________end
 
@@ -326,17 +318,13 @@ bool CameraGrab()
    ========================================================================================== */
 void synchronize_settings()
 {
-    for(unsigned int i = 0; i < NUMOFCAMERAS; i++) {
-        if(is_pyc(&CAMERAS[i])) {
-            CAMERAS[i].Rate = current_settings.PY_rate;
-            CAMERAS[i].ExposureLength = current_settings.PY_exposure;
-            CAMERAS[i].Gain = current_settings.PY_gain;
-        } else {
-            CAMERAS[i].Rate = current_settings.R_rate;
-            CAMERAS[i].ExposureLength = current_settings.R_exposure;
-            CAMERAS[i].Gain = current_settings.R_gain;
-        }
-    }
+    CAMERAS[0].Rate = current_settings.PY_rate;
+    CAMERAS[0].ExposureLength = current_settings.PY_exposure;
+    CAMERAS[0].Gain = current_settings.PY_gain;
+
+    CAMERAS[1].Rate = current_settings.R_rate;
+    CAMERAS[1].ExposureLength = current_settings.R_exposure;
+    CAMERAS[1].Gain = current_settings.R_gain;
 }
 // __________________________________________________________________________________________end
 
@@ -402,7 +390,7 @@ int create_timer()
 int arm_timer()
 {
     TICKS_PER_SECOND = 1;
-    for(unsigned int i = 0; i < NUMOFCAMERAS; i++) {
+    for(unsigned int i = 0; i < MAX_CAMERAS; i++) {
         TICKS_PER_SECOND *= CAMERAS[i].Rate;
     }
     cout << "This is the ticks per second: " << TICKS_PER_SECOND << "\n";
@@ -517,15 +505,8 @@ void CameraStop(tCamera *Camera)
   ========================================================================================== */
 void tick_handler(int x)
 {
-    switch(NUMOFCAMERAS) {
-        case 1:
-            spawn_thread(&CAMERAS[0]);
-            break;
-        case 2:
-        default:
-            if((CURRENT_TICK % CAMERAS[1].Rate) == 0) spawn_thread(&CAMERAS[0]);
-            if((CURRENT_TICK % CAMERAS[0].Rate) == 0) spawn_thread(&CAMERAS[1]);
-    }
+    if((CURRENT_TICK % CAMERAS[1].Rate) == 0) spawn_thread(&CAMERAS[0]);
+    if((CURRENT_TICK % CAMERAS[0].Rate) == 0) spawn_thread(&CAMERAS[1]);
 
     //update CURRENT_TICK
     CURRENT_TICK = ((CURRENT_TICK + 1) % TICKS_PER_SECOND);
@@ -538,6 +519,7 @@ void tick_handler(int x)
   ========================================================================================== */
 void spawn_thread(tCamera *Camera)
 {
+    if(!Camera->Handle) return;
     if(!PAUSEPROGRAM && g_running_camera_main) {
         int thread_err;
         pthread_attr_t attr;                                            //attribute object
@@ -1194,7 +1176,7 @@ void RestartImCap(tCamera *Camera)
 void DisplayParameters()
 {
     printf("\n");
-    for(unsigned int i = 0; i < NUMOFCAMERAS; i++) {
+    for(unsigned int i = 0; i < MAX_CAMERAS; i++) {
         printf("Displaying settings for camera with ID %lu\n", CAMERAS[i].UID);
         printf("----------\n");
         printf("Images per second: %d\n", CAMERAS[i].Rate);
