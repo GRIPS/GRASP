@@ -488,6 +488,16 @@ void *CommandListenerThread(void *threadargs)
     CommandReceiver comReceiver( (unsigned short) PORT_CMD);
     comReceiver.init_connection();
 
+    // If talking to the flight computer, synchronize the clock on the odds & ends board
+    // This code is here to make sure that we are ready to receive the imminent sync command
+    if (strncmp(ip_tm, IP_FC, 20) == 0) {
+        printLogTimestamp();
+        std::cout << "Sending synchronization command to flight computer\n";
+        CommandSender cmdSender(IP_FC, PORT_CMD);
+        CommandPacket cp(0x0A, 0x51, 0xF0);
+        cmdSender.send( &cp );
+    }
+
     while(!stop_message[tid])
     {
         int packet_length;
