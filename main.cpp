@@ -82,6 +82,7 @@
 #include <ctime>        /* time_t, struct tm, time, gmtime */
 #include <iostream>
 #include <string>
+#include <sys/statvfs.h> /* for statvfs */
 #include <fstream>
 
 #include "UDPSender.hpp"
@@ -351,7 +352,31 @@ void *TelemetryHousekeepingThread(void *threadargs)
         // bit 7 is TBD
         tp << status_bitfield << latest_command_key;
 
+        // Temperatures
         tp << (int16_t)(temp_py * 100) << (int16_t)(temp_roll * 100) << (int16_t)(temp_mb * 100);
+
+        // CPU usage
+        FILE* fp = fopen("/proc/stat", "r");
+        long user, nice, system, idle;
+        fscanf(fp, "%*s %ld %ld %ld %ld", &user, &nice, &system, &idle);
+        fclose(fp);
+        tp << (uint16_t)(100 * 100 * (1 - (double)idle / (user + nice + system + idle)));
+
+        // Disk usage
+        struct statvfs vfs;
+        statvfs("/data0", &vfs);
+        tp << (uint16_t)(100 * 100 * (1 - (double)vfs.f_bavail / vfs.f_blocks));
+        statvfs("/data1", &vfs);
+        tp << (uint16_t)(100 * 100 * (1 - (double)vfs.f_bavail / vfs.f_blocks));
+        statvfs("/data2", &vfs);
+        tp << (uint16_t)(100 * 100 * (1 - (double)vfs.f_bavail / vfs.f_blocks));
+
+        // Uptime
+        fp = fopen("/proc/uptime", "r");
+        float uptime;
+        fscanf(fp, "%f", &uptime);
+        fclose(fp);
+        tp << (uint32_t)uptime;
 
         tm_packet_queue << tp;
     }
