@@ -337,6 +337,13 @@ void *TelemetryHousekeepingThread(void *threadargs)
 
     uint32_t tm_frame_sequence_number = 0;
 
+    FILE* fp = fopen("/proc/stat", "r");
+    long user1, nice1, system1, idle1;
+    fscanf(fp, "%*s %ld %ld %ld %ld", &user1, &nice1, &system1, &idle1);
+    fclose(fp);
+
+    long user2, nice2, system2, idle2;
+
     while(!stop_message[tid])
     {
         usleep_force(current_settings.cadence_housekeeping * 1000000);
@@ -359,11 +366,15 @@ void *TelemetryHousekeepingThread(void *threadargs)
         tp << (int16_t)(temp_py * 100) << (int16_t)(temp_roll * 100) << (int16_t)(temp_mb * 100);
 
         // CPU usage
-        FILE* fp = fopen("/proc/stat", "r");
-        long user, nice, system, idle;
-        fscanf(fp, "%*s %ld %ld %ld %ld", &user, &nice, &system, &idle);
+        fp = fopen("/proc/stat", "r");
+        long user2, nice2, system2, idle2;
+        fscanf(fp, "%*s %ld %ld %ld %ld", &user2, &nice2, &system2, &idle2);
         fclose(fp);
-        tp << (uint16_t)(100 * 100 * (1 - (double)idle / (user + nice + system + idle)));
+        tp << (uint16_t)(100 * 100 * (1 - (double)(idle2 - idle1) / (user2 + nice2 + system2 + idle2 - user1 - nice1 - system1 - idle1)));
+        user1 = user2;
+        nice1 = nice2;
+        system1 = system2;
+        idle1 = idle2;
 
         // Disk usage
         struct statvfs vfs;
