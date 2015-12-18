@@ -14,7 +14,7 @@ CXXFLAGS = -Inetwork -Idmm -Wall -pthread -I$(INC_DIR) $(FLAGS) -I$(CCfits) $(I_
 
 default: main
 
-all: program main quick playback
+all: program main quick playback evaluate
 
 #Variables for Nicole's executable
 EXE = grasp
@@ -39,6 +39,9 @@ quick: quick.o
 playback: playback.o
 	make -C network all
 	$(CC) -o $@ $^ network/*.o -pthread
+
+evaluate: evaluate.o
+	$(CC) -o $@ $^ -L$(CCfitslib) -lCCfits $(L_OPENCV)
 
 dmm.o: dmm/dmm.c dmm/dmm.h
 	$(CC) $(CXXFLAGS) -c $<
