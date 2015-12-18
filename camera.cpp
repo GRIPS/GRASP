@@ -925,6 +925,13 @@ bool saveim(tCamera *Camera, valarray<unsigned char> &imarr, const char* filenam
     string newName ("Raw Frame");
     long fpixel(1);
 
+    // Aggressive data reduction in 9 out of 10 of roll images to reduce data load
+    if (!is_pyc(Camera) && ((Camera->pcount % 10) != 0)) {
+        long chunk = Camera->FrameWidth / 10 * Camera->FrameHeight;
+        memset(&imarr[0] + chunk, 0, 3 * chunk);
+        memset(&imarr[0] + 6 * chunk, 0, 3 * chunk);
+    }
+
     try {
         imageExt = pFits->addImage(newName, BYTE_IMG, extAx, 1);
         imageExt->write(fpixel, Camera->FrameWidth*Camera->FrameHeight, imarr);    //write extension
