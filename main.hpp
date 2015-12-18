@@ -18,6 +18,8 @@ extern volatile uint8_t roll_image_counter;
 extern float temp_py, temp_roll;
 extern pthread_mutex_t mutexAnalysis;
 
+extern char save_locations[3][100];
+
 extern bool MODE_AUTOMATIC, MODE_COMPRESS, MODE_MOCK, MODE_TIMING, MODE_VERBOSE;
 
 int usleep_force(uint64_t microseconds);

@@ -698,6 +698,7 @@ void Process(tCamera *Camera)
     }
 
     char directory[128];
+    char subdirectory[12];
     char filename[128];
     struct stat st = {0};
 
@@ -707,7 +708,8 @@ void Process(tCamera *Camera)
         capturetime = gmtime(&Camera->ClockPC[localIndex].tv_sec);
         strftime(timestamp, 14, "%y%m%d_%H%M%S", capturetime);
 
-        strftime(directory, 128, "images/%Y%m%d_%H", capturetime);
+        strftime(subdirectory, 12, "%Y%m%d_%H", capturetime);
+        sprintf(directory, "%s/%s", save_locations[(Camera->pcount - 1) % 3], subdirectory);
         // Make the appropriate directory if it doesn't exist
         if (stat(directory, &st) == -1) {
             mkdir(directory, 0755);
@@ -852,6 +854,15 @@ void transmit_image(params &val, info &im, valarray<unsigned char> &imarr)
    ========================================================================================== */
 bool saveim(tCamera *Camera, valarray<unsigned char> &imarr, const char* filename)
 {
+    static int saves_in_progress = 0;
+
+    if ((saves_in_progress > 4) && !is_pyc(Camera)) {
+        std::cerr << "Skipping saving of roll image because " << saves_in_progress << " saves already in progress\n";
+        return false;
+    }
+
+    saves_in_progress++;
+
     using namespace CCfits;
     //using std::valarray;
 
@@ -921,6 +932,8 @@ bool saveim(tCamera *Camera, valarray<unsigned char> &imarr, const char* filenam
     } catch (FitsException) {
         std::cout<<"Couldn't write image to extension\n";
     }
+
+    saves_in_progress--;
 
     return true;
 }

@@ -24,7 +24,7 @@ clean:
 	make -C network clean
 	rm -f $(EXE)
 	rm -f *.o
-	rm -f main quick playback
+	rm -f main quick playback evaluate
 
 program:  $(SOURCES)
 	$(CC)  $(RPATH) $(TARGET) $(CFLAGS) $(SOURCES) -g -o $(EXE) $(SOLIB) $(PVLIB)  -I$(CCfits) -I$(cfitsio) -I$(cfitsiolib) -L$(CCfitslib) -lCCfits $(IMLIB)

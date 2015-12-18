@@ -1,7 +1,9 @@
 #define MAX_THREADS 30
 #define LOG_PACKETS false
 
-#define SAVE_LOCATION "./"
+#define SAVE_LOCATION1 "/data0/images"
+#define SAVE_LOCATION2 "/data1/images"
+#define SAVE_LOCATION3 "/data2/images"
 
 //Calibrated parameters (but not actually calibrated yet)
 #define ARCSEC_PER_PIXEL 16.
@@ -107,6 +109,7 @@ float grid_rotation_rate = -1;
 struct dmminfo DMM1;
 float temp_py = 0, temp_roll = 0, temp_mb = 0;
 char ip_tm[20];
+char save_locations[3][100] = { SAVE_LOCATION1, SAVE_LOCATION2, SAVE_LOCATION3 };
 
 // global mode variables
 bool MODE_AUTOMATIC = false; //used by camera main
