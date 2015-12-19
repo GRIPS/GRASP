@@ -20,7 +20,7 @@ extern pthread_mutex_t mutexAnalysis;
 
 extern char save_locations[3][100];
 
-extern bool MODE_AUTOMATIC, MODE_COMPRESS, MODE_MOCK, MODE_TIMING, MODE_VERBOSE;
+extern bool MODE_AUTOMATIC, MODE_COMPRESS, MODE_DECIMATE, MODE_MOCK, MODE_TIMING, MODE_VERBOSE;
 
 int usleep_force(uint64_t microseconds);
 

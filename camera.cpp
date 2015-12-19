@@ -925,11 +925,25 @@ bool saveim(tCamera *Camera, valarray<unsigned char> &imarr, const char* filenam
     string newName ("Raw Frame");
     long fpixel(1);
 
-    // Aggressive data reduction in 9 out of 10 of roll images to reduce data load
-    if (!is_pyc(Camera) && ((Camera->pcount % 10) != 0)) {
-        long chunk = Camera->FrameWidth / 10 * Camera->FrameHeight;
-        memset(&imarr[0] + chunk, 0, 3 * chunk);
-        memset(&imarr[0] + 6 * chunk, 0, 3 * chunk);
+    if (MODE_DECIMATE) {
+        if (is_pyc(Camera)) {
+            // For pitch-yaw images at N per second, keep one key frame per second and throw out (N-2)/(N-1) rows of the other frames
+            int mod = (Camera->pcount % Camera->Rate);
+            if ((Camera->Rate >= 3) && (mod != 0)) {
+                for (unsigned int row = 0; row < Camera->FrameHeight; row++) {
+                    if ((row % (Camera->Rate - 1)) != (mod - 1)) {
+                        memset(&imarr[row * Camera->FrameWidth], 0, Camera->FrameWidth);
+                    }
+                }
+            }
+        } else {
+            // For roll images, simply keep only 1 out of every 10 rows
+            for (unsigned int row = 0; row < Camera->FrameHeight; row++) {
+                if ((row % 10) != (Camera->pcount % 10)) {
+                    memset(&imarr[row * Camera->FrameWidth], 0, Camera->FrameWidth);
+                }
+            }
+        }
     }
 
     try {

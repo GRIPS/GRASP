@@ -114,6 +114,7 @@ char save_locations[3][100] = { SAVE_LOCATION1, SAVE_LOCATION2, SAVE_LOCATION3 }
 // global mode variables
 bool MODE_AUTOMATIC = false; //used by camera main
 bool MODE_COMPRESS = false; //used by camera main
+bool MODE_DECIMATE = false; //used by camera main
 bool MODE_MOCK = false; //used by camera main
 bool MODE_NETWORK = false;
 bool MODE_TIMING = false; //used by camera main
@@ -367,7 +368,6 @@ void *TelemetryHousekeepingThread(void *threadargs)
 
         // CPU usage
         fp = fopen("/proc/stat", "r");
-        long user2, nice2, system2, idle2;
         fscanf(fp, "%*s %ld %ld %ld %ld", &user2, &nice2, &system2, &idle2);
         fclose(fp);
         tp << (uint16_t)(100 * 100 * (1 - (double)(idle2 - idle1) / (user2 + nice2 + system2 + idle2 - user1 - nice1 - system1 - idle1)));
@@ -1016,6 +1016,10 @@ int main(int argc, char *argv[])
                     case 'c':
                         std::cout << "Compress mode\n";
                         MODE_COMPRESS = true;
+                        break;
+                    case 'd':
+                        std::cout << "Decimate mode\n";
+                        MODE_DECIMATE = true;
                         break;
                     case 'i':
                         strncpy(ip_tm, &argv[i][j+1], 20);
