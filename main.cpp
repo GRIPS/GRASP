@@ -1,7 +1,7 @@
 #define MAX_THREADS 30
 #define LOG_PACKETS true
 
-#define LOG_LOCATION "/data0"
+#define LOG_LOCATION "/data0/logs"
 #define SAVE_LOCATION1 "/data0/images"
 #define SAVE_LOCATION2 "/data1/images"
 #define SAVE_LOCATION3 "/data2/images"
@@ -293,9 +293,9 @@ void *TelemetrySenderThread(void *threadargs)
 
     if (LOG_PACKETS) {
         writeCurrentUT(timestamp);
-        sprintf(filename, "%s/log_tm_%s.bin", LOG_LOCATION, timestamp);
+        sprintf(filename, "%s/tm_%s.bin", LOG_LOCATION, timestamp);
         filename[128 - 1] = '\0';
-        printf("Creating telemetry log file %s \n",filename);
+        printf("Creating telemetry log file %s\n",filename);
         log.open(filename, std::ofstream::binary);
     }
 
