@@ -1,6 +1,7 @@
 #define MAX_THREADS 30
-#define LOG_PACKETS false
+#define LOG_PACKETS true
 
+#define LOG_LOCATION "/data0"
 #define SAVE_LOCATION1 "/data0/images"
 #define SAVE_LOCATION2 "/data1/images"
 #define SAVE_LOCATION3 "/data2/images"
@@ -286,19 +287,18 @@ void *TelemetrySenderThread(void *threadargs)
     long tid = (long)((struct Thread_data *)threadargs)->thread_id;
     printf("TelemetrySender thread #%ld!\n", tid);
 
-/*
     char timestamp[14];
     char filename[128];
     std::ofstream log;
 
     if (LOG_PACKETS) {
         writeCurrentUT(timestamp);
-        sprintf(filename, "%slog_tm_%s.bin", SAVE_LOCATION, timestamp);
+        sprintf(filename, "%s/log_tm_%s.bin", LOG_LOCATION, timestamp);
         filename[128 - 1] = '\0';
         printf("Creating telemetry log file %s \n",filename);
         log.open(filename, std::ofstream::binary);
     }
-*/
+
     TelemetrySender telSender(ip_tm, (unsigned short) PORT_TM);
 
     while(!stop_message[tid])
@@ -310,23 +310,25 @@ void *TelemetrySenderThread(void *threadargs)
             tm_packet_queue >> tp;
             telSender.send( &tp );
             if(MODE_NETWORK) std::cout << "TelemetrySender: " << tp.getLength() << " bytes, " << tp << std::endl;
-/*
+
             if (LOG_PACKETS && log.is_open()) {
                 uint16_t length = tp.getLength();
                 uint8_t *payload = new uint8_t[length];
                 tp.outputTo(payload);
                 log.write((char *)payload, length);
                 delete payload;
-                //log.flush();
             }
-*/
+        } else {
+            if (LOG_PACKETS && log.is_open()) {
+                log.flush();
+            }
         }
     }
 
     printf("TelemetrySender thread #%ld exiting\n", tid);
-/*
+
     if (LOG_PACKETS && log.is_open()) log.close();
-*/
+
     started[tid] = false;
     pthread_exit( NULL );
 }
