@@ -57,8 +57,8 @@
 #define KEY_PYC_SAVE_ON          0xA1
 #define KEY_RC_SAVE_OFF          0xB0
 #define KEY_RC_SAVE_ON           0xB1
-#define KEY_IRS_OFF              0xC0 //not yet implemented
-#define KEY_IRS_ON               0xC1 //not yet implemented
+#define KEY_DECIMATE_OFF         0xC0
+#define KEY_DECIMATE_ON          0xC1
 #define KEY_TM_SEND_SETTINGS     0xD0
 #define KEY_TM_CADENCE_HK        0xD1
 #define KEY_TM_CADENCE_A2D       0xD2
@@ -361,7 +361,7 @@ void *TelemetryHousekeepingThread(void *threadargs)
         // bit 3 is TBD
         bitwrite(&status_bitfield, 4, 1, CAMERAS[0].WantToSave);
         bitwrite(&status_bitfield, 5, 1, CAMERAS[1].WantToSave);
-        // bit 6 is TBD
+        bitwrite(&status_bitfield, 6, 1, MODE_DECIMATE);
         // bit 7 is TBD
         tp << status_bitfield << latest_command_key;
 
@@ -649,9 +649,23 @@ void *CommandHandlerThread(void *threadargs)
                     std::cout << "Turning ON saving of roll images\n";
                     error_code = 0;
                     break;
-                case KEY_IRS_OFF: //Turn OFF IR sensor
+                case KEY_DECIMATE_OFF: //Turn OFF image decimation
+                    if(MODE_DECIMATE) {
+                        std::cout << "Turning OFF image decimation\n";
+                        MODE_DECIMATE = false;
+                        error_code = 0;
+                    } else {
+                        error_code = ACK_NOACTION;
+                    }
                     break;
-                case KEY_IRS_ON: //Turn ON IR sensor
+                case KEY_DECIMATE_ON: //Turn ON image decimation
+                    if(!MODE_DECIMATE) {
+                        std::cout << "Turning ON image decimation\n";
+                        MODE_DECIMATE = true;
+                        error_code = 0;
+                    } else {
+                        error_code = ACK_NOACTION;
+                    }
                     break;
                 case KEY_TM_SEND_SETTINGS: //Request settings telemetry packet
                     queue_settings_tmpacket();
