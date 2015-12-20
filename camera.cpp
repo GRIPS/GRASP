@@ -227,20 +227,20 @@ bool getTemp(tCamera *Camera)
     tPvFloat32 T_MB = 0;
     //tPvFloat32 T_CCD = 0;
 
-    const char* whichfile;
-    ofstream tempfile;
-    if(is_pyc(Camera)) {
-        whichfile = "PY_temps.txt";
-    } else {
-        whichfile = "H_temps.txt";
-    }
-    tempfile.open(whichfile, ios::app);
+    //const char* whichfile;
+    //ofstream tempfile;
+    //if(is_pyc(Camera)) {
+    //    whichfile = "PY_temps.txt";
+    //} else {
+    //    whichfile = "H_temps.txt";
+    //}
+    //tempfile.open(whichfile, ios::app);
 
     if(PvAttrFloat32Get(Camera->Handle, "DeviceTemperatureMainboard", &T_MB) == 0) {
         //PvAttrFloat32Get(Camera->Handle, "DeviceTemperatureSensor", &T_CCD);
         //cout<<"T_MB = "<<T_MB<<endl;
         //cout<<"T_CCD = "<<T_CCD<<endl;
-        tempfile << T_MB <<endl;
+        //tempfile << T_MB <<endl;
 
         if(is_pyc(Camera)) {
             temp_py = T_MB;
@@ -251,7 +251,7 @@ bool getTemp(tCamera *Camera)
         return true;
     } else {
         cout<<"Temp error\n";
-        tempfile << "Temp error"<< endl;
+        //tempfile << "Temp error"<< endl;
         //PrintError(PvAttrFloat32Get(Camera->Handle, "DeviceTemperatureMainboard", &T_MB));
         //PrintError(PvAttrFloat32Get(Camera->Handle, "DeviceTemperatureSensor", &T_CCD));
         //cout<<"T_MB = "<<T_MB<<endl;
