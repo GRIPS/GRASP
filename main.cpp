@@ -1135,6 +1135,8 @@ int main(int argc, char *argv[])
             printf("Received system ID/command key 0x%02X/0x%02X\n", latest_system_id, latest_command_key);
             cmd_process_command(cp);
         }
+
+        std::cout.flush();
     }
 
     /* Last thing that main() should do */
