@@ -347,6 +347,8 @@ void *TelemetryHousekeepingThread(void *threadargs)
 
     long user2, nice2, system2, idle2;
 
+    double free0, free1, free2, min_free = 0, min_free_previous = 0, days = -1;
+
     while(!stop_message[tid])
     {
         usleep_force(current_settings.cadence_housekeeping * 1000000);
@@ -366,7 +368,24 @@ void *TelemetryHousekeepingThread(void *threadargs)
         tp << status_bitfield << latest_command_key;
 
         // Temperatures
-        tp << (int16_t)(temp_py * 100) << (int16_t)(temp_roll * 100) << (int16_t)(temp_mb * 100);
+        tp << (int16_t)(temp_py * 100) << (int16_t)(temp_roll * 100);
+        
+        // Estimate of days remaining of disk space
+        struct statvfs vfs;
+        statvfs("/data0", &vfs);
+        free0 = (double)vfs.f_bavail / vfs.f_blocks;
+        statvfs("/data1", &vfs);
+        free1 = (double)vfs.f_bavail / vfs.f_blocks;
+        statvfs("/data2", &vfs);
+        free2 = (double)vfs.f_bavail / vfs.f_blocks;
+        if ((tm_frame_sequence_number % 10) == 0) {
+            min_free_previous = min_free;
+            min_free = MIN(MIN(free0, free1), free2);
+            if (min_free_previous != 0) {
+                days = (10. * current_settings.cadence_housekeeping) / (min_free_previous - min_free) / 86400.;
+            }
+        }
+        tp << (int16_t)(days * 100);
 
         // CPU usage
         fp = fopen("/proc/stat", "r");
@@ -379,13 +398,9 @@ void *TelemetryHousekeepingThread(void *threadargs)
         idle1 = idle2;
 
         // Disk usage
-        struct statvfs vfs;
-        statvfs("/data0", &vfs);
-        tp << (uint16_t)(100 * 100 * (1 - (double)vfs.f_bavail / vfs.f_blocks));
-        statvfs("/data1", &vfs);
-        tp << (uint16_t)(100 * 100 * (1 - (double)vfs.f_bavail / vfs.f_blocks));
-        statvfs("/data2", &vfs);
-        tp << (uint16_t)(100 * 100 * (1 - (double)vfs.f_bavail / vfs.f_blocks));
+        tp << (uint16_t)(100 * 100 * (1 - free0));
+        tp << (uint16_t)(100 * 100 * (1 - free1));
+        tp << (uint16_t)(100 * 100 * (1 - free2));
 
         // Uptime
         fp = fopen("/proc/uptime", "r");
