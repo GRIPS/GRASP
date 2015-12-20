@@ -16,6 +16,10 @@ struct settings
     uint8_t cadence_housekeeping; //seconds
     uint8_t cadence_a2d; //seconds
     uint8_t cadence_science; //seconds
+
+    float screen_center_x; //pixels
+    float screen_center_y; //pixels
+    float screen_rotation; //degrees
 };
 
 int load_settings(uint8_t table);

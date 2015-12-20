@@ -467,15 +467,18 @@ void *TelemetryScienceThread(void *threadargs)
         uint8_t num_fiducials = PY_ANALYSIS.nfid;
         tp << num_fiducials;
 
-        float offset_pitch = 0, uncert_pitch = 0;
-        float offset_yaw = 0, uncert_yaw = 0;
+        float offset_pitch = 0, rotated_offset_pitch = 0, uncert_pitch = 0;
+        float offset_yaw = 0, rotated_offset_yaw = 0, uncert_yaw = 0;
         // Assume that if there are two Suns, then the brighter one is the main Sun
         if (PY_ANALYSIS.there[1]) {
-            offset_pitch = (PY_ANALYSIS.xp[0] - 639.5) * ARCSEC_PER_PIXEL / 3600.;
-            offset_yaw = (PY_ANALYSIS.yp[0] - 479.5) * ARCSEC_PER_PIXEL / 3600.; //TODO: check the sign
-            //TODO: account for rotation of camera relative to target
+            offset_pitch = -(PY_ANALYSIS.xp[0] - current_settings.screen_center_x) * ARCSEC_PER_PIXEL / 3600.;
+            offset_yaw = (PY_ANALYSIS.yp[0] - current_settings.screen_center_y) * ARCSEC_PER_PIXEL / 3600.;
+            rotated_offset_pitch = offset_pitch * cos(current_settings.screen_rotation * M_PI / 180) +
+                                   - offset_yaw * sin(current_settings.screen_rotation * M_PI / 180);
+            rotated_offset_yaw = offset_pitch * sin(current_settings.screen_rotation * M_PI / 180) +
+                                 offset_yaw * cos(current_settings.screen_rotation * M_PI / 180);
         }
-        tp << offset_pitch << uncert_pitch << offset_yaw << uncert_yaw;
+        tp << rotated_offset_pitch << uncert_pitch << rotated_offset_yaw << uncert_yaw;
 
         float new_grid_orientation = PY_ANALYSIS.theta;
         float delta_grid_orientation = new_grid_orientation - old_grid_orientation;

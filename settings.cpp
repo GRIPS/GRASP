@@ -23,6 +23,9 @@ int load_settings(uint8_t table)
         fscanf(infile, "%hhu", &current_settings.cadence_housekeeping);
         fscanf(infile, "%hhu", &current_settings.cadence_a2d);
         fscanf(infile, "%hhu", &current_settings.cadence_science);
+        fscanf(infile, "%f", &current_settings.screen_center_x);
+        fscanf(infile, "%f", &current_settings.screen_center_y);
+        fscanf(infile, "%f", &current_settings.screen_rotation);
         fclose(infile);
         current_table = table;
         return 0;
@@ -42,6 +45,9 @@ void save_settings()
         fprintf(outfile, "%hhu\n", current_settings.cadence_housekeeping);
         fprintf(outfile, "%hhu\n", current_settings.cadence_a2d);
         fprintf(outfile, "%hhu\n", current_settings.cadence_science);
+        fprintf(outfile, "%f\n", current_settings.screen_center_x);
+        fprintf(outfile, "%f\n", current_settings.screen_center_y);
+        fprintf(outfile, "%f\n", current_settings.screen_rotation);
         fclose(outfile);
         current_table = 255;
     }
