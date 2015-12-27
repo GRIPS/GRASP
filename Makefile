@@ -38,7 +38,7 @@ quick: quick.o
 
 playback: playback.o
 	make -C network all
-	$(CC) -o $@ $^ network/*.o -pthread
+	$(CC) -o $@ $^ network/*.o -pthread -static
 
 evaluate: evaluate.o
 	$(CC) -o $@ $^ -L$(CCfitslib) -lCCfits $(L_OPENCV)

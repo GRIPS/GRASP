@@ -10,25 +10,38 @@ void help_message(char name[])
 {
     std::cout << "Usage: " << name << " [options] <files>\n";
     std::cout << "Command-line options:\n";
-    std::cout << "-i<ip>     Send telemetry packets to this IP instead of 127.0.0.1\n";
-    std::cout << "-p<port>   Send telemetry packets to this port instead of 60501\n";
-    std::cout << "-s<speed>  Integer multiplier to speed up playback\n";
+    std::cout << "-i<ip>         Send telemetry packets to this IP instead of 127.0.0.1\n";
+    std::cout << "-p<port>       Send telemetry packets to this port instead of 60501\n";
+    std::cout << "-fs<SystemID>  Send only telemetry packets with this SystemID in decimal\n";
+    std::cout << "-ft<TmType>    Send only telemetry packets with this TmType in decimal\n";
+    std::cout << "-s<speed>      Multiplier to speed up or slow down playback\n";
 }
 
 int main(int argc, char *argv[])
 {
+    setbuf(stdout, NULL);
+
     char ip[20];
     strncpy(ip, "127.0.0.1", 20);
 
     uint16_t port = 60501;
-    uint16_t speed_factor = 1;
+    float speed_factor = 1;
 
     uint16_t nfiles = 0;
+
+    uint8_t filter_systemid = 0xFF, filter_tmtype = 0xFF;
+
+    Clock last_systemtime = 0;
 
     for(int i = 1; i < argc; i++) {
         if(argv[i][0] == '-') {
             for(int j = 1; argv[i][j] != 0; j++) {
                 switch(argv[i][j]) {
+                    case 'f':
+                        if(argv[i][j+1] == 's') filter_systemid = atoi(&argv[i][j+2]);
+                        if(argv[i][j+1] == 't') filter_tmtype = atoi(&argv[i][j+2]);
+                        j = strlen(&argv[i][0]) - 1;
+                        break;
                     case 'i':
                         strncpy(ip, &argv[i][j+1], 20);
                         ip[19] = 0;
@@ -39,7 +52,7 @@ int main(int argc, char *argv[])
                         j = strlen(&argv[i][0]) - 1;
                         break;
                     case 's':
-                        speed_factor = atoi(&argv[i][j+1]);
+                        speed_factor = atof(&argv[i][j+1]);
                         j = strlen(&argv[i][0]) - 1;
                         break;
                     case '?':
@@ -78,6 +91,8 @@ int main(int argc, char *argv[])
         if(argv[i][0] != '-') {
             std::cout << "Playing back " << argv[i] << std::endl;
 
+            uint8_t percent_completed = 0;
+
             std::ifstream ifs(argv[i]);
 
             if(ifs.good()) {
@@ -103,13 +118,21 @@ int main(int argc, char *argv[])
 
                             tp = TelemetryPacket(buffer, length+16);
 
-                            if(tp.valid()) {
+                            if(tp.valid() &&
+                               ((filter_systemid == 0xFF) || (tp.getSystemID() == filter_systemid)) &&
+                               ((filter_tmtype == 0xFF) || (tp.getTmType() == filter_tmtype))) {
                                 telSender.send(&tp);
-                                if(((uint64_t)cur+length+15)/(size/50) > cur/(size/50)) {
-                                    std::cout << ".";
-                                    std::cout.flush();
+
+                                if ((last_systemtime != 0) && (last_systemtime < tp.getSystemTime())) {
+                                    usleep((tp.getSystemTime() - last_systemtime) / 10 / speed_factor);
+                                    last_systemtime = tp.getSystemTime();
                                 }
-                                usleep(30000); // FIXME: play back at actual rate
+                                if (last_systemtime == 0) last_systemtime = tp.getSystemTime();
+                            }
+
+                            if((((uint64_t)ifs.tellg())*100/size) > percent_completed) {
+                                percent_completed++;
+                                printf("%3u%%\b\b\b\b", percent_completed);
                             }
 
                             ifs.seekg(cur);
