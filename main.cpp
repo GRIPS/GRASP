@@ -49,6 +49,8 @@
 #define KEY_NULL                 0x00
 
 //ASP commands
+#define KEY_POINTING_OFF         0x80
+#define KEY_POINTING_ON          0x81
 #define KEY_SET_CLOCK_FOR_SYNC   0x99
 #define KEY_PYC_SAVE_OFF         0xA0
 #define KEY_PYC_SAVE_ON          0xA1
@@ -115,6 +117,7 @@ bool MODE_COMPRESS = false; //used by camera main
 bool MODE_DECIMATE = false; //used by camera main
 bool MODE_MOCK = false; //used by camera main
 bool MODE_NETWORK = false;
+bool MODE_POINTING = false; //used by camera main
 bool MODE_TIMING = false; //used by camera main
 bool MODE_UNCONNECTED = false;
 bool MODE_VERBOSE = false; //used by camera main
@@ -361,7 +364,7 @@ void *TelemetryHousekeepingThread(void *threadargs)
         bitwrite(&status_bitfield, 4, 1, CAMERAS[0].WantToSave);
         bitwrite(&status_bitfield, 5, 1, CAMERAS[1].WantToSave);
         bitwrite(&status_bitfield, 6, 1, MODE_DECIMATE);
-        // bit 7 is TBD
+        bitwrite(&status_bitfield, 7, 1, MODE_POINTING);
         tp << status_bitfield << latest_command_key;
 
         // Temperatures
@@ -454,7 +457,11 @@ void *TelemetryScienceThread(void *threadargs)
 
     while(!stop_message[tid])
     {
-        usleep_force(current_settings.cadence_science * 1000000);
+        if (MODE_POINTING) {
+            usleep_force(1000000 / current_settings.PY_rate);
+        } else {
+            usleep_force(current_settings.cadence_science * 1000000);
+        }
         tm_frame_sequence_number++;
 
         TelemetryPacket tp(SYS_ID_ASP, TM_SCIENCE, tm_frame_sequence_number, oeb_get_clock());
@@ -635,6 +642,24 @@ void *CommandHandlerThread(void *threadargs)
         case SYS_ID_ASP:
             switch(my_data->command_key)
             {
+                case KEY_POINTING_OFF: //Turn OFF pointing mode
+                    if(MODE_POINTING) {
+                        std::cout << "Turning OFF pointing mode\n";
+                        MODE_POINTING = false;
+                        error_code = 0;
+                    } else {
+                        error_code = ACK_NOACTION;
+                    }
+                    break;
+                case KEY_POINTING_ON: //Turn ON pointing mode
+                    if(!MODE_POINTING) {
+                        std::cout << "Turning ON pointing mode\n";
+                        MODE_POINTING = true;
+                        error_code = 0;
+                    } else {
+                        error_code = ACK_NOACTION;
+                    }
+                    break;
                 case KEY_SET_CLOCK_FOR_SYNC: //Set clock value to sync to
                     value &= 0xFFFFFFFFFFFF; //keep only 6 bytes
                     oeb_set_clock(value);
@@ -1064,6 +1089,10 @@ int main(int argc, char *argv[])
                     case 'n':
                         std::cout << "Network diagnostics mode\n";
                         MODE_NETWORK = true;
+                        break;
+                    case 'p':
+                        std::cout << "Pointing mode\n";
+                        MODE_POINTING = true;
                         break;
                     case 's':
                         table_to_load = atoi(&argv[i][j+1]);

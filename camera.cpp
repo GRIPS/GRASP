@@ -764,8 +764,8 @@ void Process(tCamera *Camera)
     if(MODE_TIMING) cout << (py ? "Pitch-yaw" : "Roll")
                          << " image ready in " << stopwatch(watch) << " us\n";
 
-    // Only proceed with analysis on one frame each second (per camera)
-    if((Camera->pcount % Camera->Rate) == 0) {
+    // If not in pointing mode, only proceed with analysis on one frame each second (per camera)
+    if((MODE_POINTING && py) || ((Camera->pcount % Camera->Rate) == 0)) {
 
     if(MODE_TIMING) stopwatch(watch);
     if(py) {
