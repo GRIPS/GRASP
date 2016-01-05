@@ -20,7 +20,8 @@ struct settings
     float screen_center_x; //pixels
     float screen_center_y; //pixels
     float screen_rotation; //degrees
-    float arcsec_per_pixel; //arcsec per pixel
+    float arcsec_per_pixel_x; //arcsec per pixel
+    float arcsec_per_pixel_y; //arcsec per pixel
 };
 
 int load_settings(uint8_t table);

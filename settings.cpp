@@ -26,7 +26,8 @@ int load_settings(uint8_t table)
         fscanf(infile, "%f", &current_settings.screen_center_x);
         fscanf(infile, "%f", &current_settings.screen_center_y);
         fscanf(infile, "%f", &current_settings.screen_rotation);
-        fscanf(infile, "%f", &current_settings.arcsec_per_pixel);
+        fscanf(infile, "%f", &current_settings.arcsec_per_pixel_x);
+        fscanf(infile, "%f", &current_settings.arcsec_per_pixel_y);
         fclose(infile);
         current_table = table;
         return 0;
@@ -49,7 +50,8 @@ void save_settings()
         fprintf(outfile, "%f\n", current_settings.screen_center_x);
         fprintf(outfile, "%f\n", current_settings.screen_center_y);
         fprintf(outfile, "%f\n", current_settings.screen_rotation);
-        fprintf(outfile, "%f\n", current_settings.arcsec_per_pixel);
+        fprintf(outfile, "%f\n", current_settings.arcsec_per_pixel_x);
+        fprintf(outfile, "%f\n", current_settings.arcsec_per_pixel_y);
         fclose(outfile);
         current_table = 255;
     }

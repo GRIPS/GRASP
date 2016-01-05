@@ -492,12 +492,13 @@ void *TelemetryScienceThread(void *threadargs)
         float offset_yaw = 0, rotated_offset_yaw = 0, uncert_yaw = 0;
         // Assume that if there are two Suns, then the brighter one is the main Sun
         if (PY_ANALYSIS.there[1]) {
-            offset_pitch = -(PY_ANALYSIS.xp[0] - current_settings.screen_center_x) * current_settings.arcsec_per_pixel / 3600. * M_PI / 180.;
-            offset_yaw = (PY_ANALYSIS.yp[0] - current_settings.screen_center_y) * current_settings.arcsec_per_pixel / 3600. * M_PI / 180.;
+            offset_pitch = -(PY_ANALYSIS.xp[0] - current_settings.screen_center_x) * current_settings.arcsec_per_pixel_x / 3600. * M_PI / 180.;
+            offset_yaw = (PY_ANALYSIS.yp[0] - current_settings.screen_center_y) * current_settings.arcsec_per_pixel_y / 3600. * M_PI / 180.;
             rotated_offset_pitch = offset_pitch * cos(current_settings.screen_rotation * M_PI / 180) +
                                    - offset_yaw * sin(current_settings.screen_rotation * M_PI / 180);
             rotated_offset_yaw = offset_pitch * sin(current_settings.screen_rotation * M_PI / 180) +
                                  offset_yaw * cos(current_settings.screen_rotation * M_PI / 180);
+            rotated_offset_yaw *= -1; // hack to get into Pascal's coordinate system
         }
         tp << rotated_offset_pitch << uncert_pitch << rotated_offset_yaw << uncert_yaw;
 
