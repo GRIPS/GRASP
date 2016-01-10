@@ -12,9 +12,11 @@ L_OPENCV = -lopencv_core -lopencv_imgproc
 #Used for implicit compiling of C++ files
 CXXFLAGS = -Inetwork -Idmm -Wall -pthread -I$(INC_DIR) $(FLAGS) -I$(CCfits) $(I_OPENCV)
 
+PROGRAMS = main quick playback evaluate inspect
+
 default: main
 
-all: program main quick playback evaluate
+all: program $(PROGRAMS)
 
 #Variables for Nicole's executable
 EXE = grasp
@@ -24,7 +26,7 @@ clean:
 	make -C network clean
 	rm -f $(EXE)
 	rm -f *.o
-	rm -f main quick playback evaluate
+	rm -f $(PROGRAMS)
 
 program:  $(SOURCES)
 	$(CC)  $(RPATH) $(TARGET) $(CFLAGS) $(SOURCES) -g -o $(EXE) $(SOLIB) $(PVLIB)  -I$(CCfits) -I$(cfitsio) -I$(cfitsiolib) -L$(CCfitslib) -lCCfits $(IMLIB)
@@ -37,6 +39,10 @@ quick: quick.o
 	$(CC) -o $@ $^ network/*.o -pthread
 
 playback: playback.o
+	make -C network all
+	$(CC) -o $@ $^ network/*.o -pthread -static
+
+inspect: inspect.o
 	make -C network all
 	$(CC) -o $@ $^ network/*.o -pthread -static
 
