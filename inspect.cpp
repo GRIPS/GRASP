@@ -3,56 +3,37 @@
 #include <unistd.h>
 #include <string.h>
 
-#include "UDPSender.hpp"
 #include "Telemetry.hpp"
 
 void help_message(char name[])
 {
     std::cout << "Usage: " << name << " [options] <files>\n";
     std::cout << "Command-line options:\n";
-    std::cout << "-i<ip>         Send telemetry packets to this IP instead of 127.0.0.1\n";
-    std::cout << "-p<port>       Send telemetry packets to this port instead of 60501\n";
-    std::cout << "-fs<SystemID>  Send only telemetry packets with this SystemID in decimal\n";
-    std::cout << "-ft<TmType>    Send only telemetry packets with this TmType in decimal\n";
-    std::cout << "-s<speed>      Multiplier to speed up or slow down playback\n";
+    std::cout << "-e             Only inspect event packets (TmType 0xF3 from card cages)\n";
+    std::cout << "-fs<SystemID>  Only inspect telemetry packets with this SystemID in decimal\n";
+    std::cout << "-ft<TmType>    Only inspect telemetry packets with this TmType in decimal\n";
 }
 
 int main(int argc, char *argv[])
 {
     setbuf(stdout, NULL);
 
-    char ip[20];
-    strncpy(ip, "127.0.0.1", 20);
-
-    uint16_t port = 60501;
-    float speed_factor = 1;
-
     uint16_t nfiles = 0;
 
     uint8_t filter_systemid = 0xFF, filter_tmtype = 0xFF;
-
-    Clock last_systemtime = 0;
+    bool filter_events = false;
 
     for(int i = 1; i < argc; i++) {
         if(argv[i][0] == '-') {
             for(int j = 1; argv[i][j] != 0; j++) {
                 switch(argv[i][j]) {
+                    case 'e':
+                        filter_events = true;
+                        j = strlen(&argv[i][0]) - 1;
+                        break;
                     case 'f':
                         if(argv[i][j+1] == 's') filter_systemid = atoi(&argv[i][j+2]);
                         if(argv[i][j+1] == 't') filter_tmtype = atoi(&argv[i][j+2]);
-                        j = strlen(&argv[i][0]) - 1;
-                        break;
-                    case 'i':
-                        strncpy(ip, &argv[i][j+1], 20);
-                        ip[19] = 0;
-                        j = strlen(&argv[i][0]) - 1;
-                        break;
-                    case 'p':
-                        port = atoi(&argv[i][j+1]);
-                        j = strlen(&argv[i][0]) - 1;
-                        break;
-                    case 's':
-                        speed_factor = atof(&argv[i][j+1]);
                         j = strlen(&argv[i][0]) - 1;
                         break;
                     case '?':
@@ -68,15 +49,10 @@ int main(int argc, char *argv[])
         }
     }
 
-    std::cout << "Playing back " << nfiles << " file(s) to " << ip << ":" << port;
-    std::cout << " at " << speed_factor << "x speed\n";
-
     if(nfiles == 0) {
         help_message(argv[0]);
         return -1;
     }
-
-    TelemetrySender telSender(ip, port);
 
     std::streampos cur;
 
@@ -85,11 +61,21 @@ int main(int argc, char *argv[])
 
     uint16_t length;
 
+    uint32_t count[256][256];
+    uint32_t bad_checksum[256][256];
+    Clock first_systemtime = 0, last_systemtime = 0;
+    bool not_coincident[16];
+
     TelemetryPacket tp(NULL);
 
     for(int i = 1; i < argc; i++) {
+        memset(count, 0, sizeof(count));
+        memset(bad_checksum, 0, sizeof(bad_checksum));
+        first_systemtime = last_systemtime = 0;
+        memset(not_coincident, 0, sizeof(not_coincident));
+
         if(argv[i][0] != '-') {
-            std::cout << "Playing back " << argv[i] << std::endl;
+            std::cout << "Inspecting " << argv[i] << std::endl;
 
             uint8_t percent_completed = 0;
 
@@ -119,17 +105,23 @@ int main(int argc, char *argv[])
                             tp = TelemetryPacket(buffer, length+16);
 
                             if(tp.valid() &&
+                               ((!filter_events) || (((tp.getSystemID() & 0xF0) == 0x80) && (tp.getTmType() == 0xF3))) &&
                                ((filter_systemid == 0xFF) || (tp.getSystemID() == filter_systemid)) &&
                                ((filter_tmtype == 0xFF) || (tp.getTmType() == filter_tmtype))) {
-                                telSender.send(&tp);
 
-                                if ((last_systemtime != 0) && (last_systemtime < tp.getSystemTime())) {
-                                    usleep((tp.getSystemTime() - last_systemtime) / 10 / speed_factor);
-                                    last_systemtime = tp.getSystemTime();
+                                count[tp.getSystemID()][tp.getTmType()]++;
+
+                                if(((tp.getSystemID() & 0xF0) == 0x80) && (tp.getTmType() == 0xF3)) {
+                                    if(((buffer[19] == 0) && (buffer[20] == 0) && (buffer[21] == 0)) ||
+                                       ((buffer[22] == 0) && (buffer[23] == 0) && (buffer[24] == 0))) {
+                                        not_coincident[tp.getSystemID() & 0x0F] = true;
+                                    }
                                 }
-                                if (last_systemtime == 0) last_systemtime = tp.getSystemTime();
+
+                                if(first_systemtime == 0) first_systemtime = tp.getSystemTime();
+                                last_systemtime = tp.getSystemTime();
                             } else {
-                                fprintf(stderr, "Invalid checksum: SystemId 0x%02x, TmType 0x%02x\n", tp.getSystemID(), tp.getTmType());
+                                bad_checksum[tp.getSystemID()][tp.getTmType()]++;
                             }
 
                             if((((uint64_t)ifs.tellg())*100/size) > percent_completed) {
@@ -142,9 +134,25 @@ int main(int argc, char *argv[])
                     }
                 }
 
-                std::cout << std::endl;
-
                 ifs.close();
+
+                std::cout << "\nPacket breakdown:\n";
+                for(int j = 0; j < 256; j++) {
+                    for(int k = 0; k < 256; k++) {
+                        if(count[j][k] > 0) {
+                            printf("  0x%02x 0x%02x : %lu", j, k, count[j][k]);
+                            if(((j & 0xF0) == 0x80) && (k == 0xF3) && not_coincident[j & 0x0F]) {
+                                printf(" (includes non-coincident data!)");
+                            }
+                            if(bad_checksum[j][k] > 0) {
+                                printf(" with %lu bad checksums", bad_checksum[j][k]);
+                            }
+                            printf("\n");
+                        }
+                    }
+                }
+
+                printf("Elapsed gondola time: %llu (%f minutes)\n\n", last_systemtime - first_systemtime, (last_systemtime - first_systemtime) * 1e-7 / 60);
             }
         }
     }
