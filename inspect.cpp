@@ -63,6 +63,7 @@ int main(int argc, char *argv[])
 
     uint32_t count[256][256];
     uint32_t bad_checksum[256][256];
+    uint64_t amount[256][256];
     Clock first_systemtime = 0, last_systemtime = 0;
     bool not_coincident[16];
 
@@ -71,6 +72,7 @@ int main(int argc, char *argv[])
     for(int i = 1; i < argc; i++) {
         memset(count, 0, sizeof(count));
         memset(bad_checksum, 0, sizeof(bad_checksum));
+        memset(amount, 0, sizeof(amount));
         first_systemtime = last_systemtime = 0;
         memset(not_coincident, 0, sizeof(not_coincident));
 
@@ -110,6 +112,7 @@ int main(int argc, char *argv[])
                                ((filter_tmtype == 0xFF) || (tp.getTmType() == filter_tmtype))) {
 
                                 count[tp.getSystemID()][tp.getTmType()]++;
+                                amount[tp.getSystemID()][tp.getTmType()] += length+16;
 
                                 if(((tp.getSystemID() & 0xF0) == 0x80) && (tp.getTmType() == 0xF3)) {
                                     if(((buffer[19] == 0) && (buffer[20] == 0) && (buffer[21] == 0)) ||
@@ -140,12 +143,12 @@ int main(int argc, char *argv[])
                 for(int j = 0; j < 256; j++) {
                     for(int k = 0; k < 256; k++) {
                         if(count[j][k] > 0) {
-                            printf("  0x%02x 0x%02x : %lu", j, k, count[j][k]);
+                            printf("  0x%02x 0x%02x : [%4.1f%%] %lu", j, k, 100. * amount[j][k] / size, count[j][k]);
                             if(((j & 0xF0) == 0x80) && (k == 0xF3) && not_coincident[j & 0x0F]) {
                                 printf(" (includes non-coincident data!)");
                             }
                             if(bad_checksum[j][k] > 0) {
-                                printf(" with %lu bad checksums", bad_checksum[j][k]);
+                                printf(", plus %lu with bad checksums", bad_checksum[j][k]);
                             }
                             printf("\n");
                         }
