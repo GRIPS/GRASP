@@ -64,6 +64,8 @@ int main(int argc, char *argv[])
     uint32_t count[256][256];
     uint32_t bad_checksum[256][256];
     uint64_t amount[256][256];
+    uint16_t previous_frame_counter[256][256];
+    uint32_t gaps[256][256];
     Clock first_systemtime = 0, last_systemtime = 0;
     bool not_coincident[16];
 
@@ -73,6 +75,8 @@ int main(int argc, char *argv[])
         memset(count, 0, sizeof(count));
         memset(bad_checksum, 0, sizeof(bad_checksum));
         memset(amount, 0, sizeof(amount));
+        memset(previous_frame_counter, 0xFF, sizeof(previous_frame_counter));
+        memset(gaps, 0, sizeof(gaps));
         first_systemtime = last_systemtime = 0;
         memset(not_coincident, 0, sizeof(not_coincident));
 
@@ -105,26 +109,39 @@ int main(int argc, char *argv[])
                             ifs.read((char *)buffer+1, length+15);
 
                             tp = TelemetryPacket(buffer, length+16);
+                            uint8_t this_systemid = tp.getSystemID();
+                            uint8_t this_tmtype = tp.getTmType();
 
                             if(tp.valid() &&
-                               ((!filter_events) || (((tp.getSystemID() & 0xF0) == 0x80) && (tp.getTmType() == 0xF3))) &&
-                               ((filter_systemid == 0xFF) || (tp.getSystemID() == filter_systemid)) &&
-                               ((filter_tmtype == 0xFF) || (tp.getTmType() == filter_tmtype))) {
+                               ((!filter_events) || (((this_systemid & 0xF0) == 0x80) && (this_tmtype == 0xF3))) &&
+                               ((filter_systemid == 0xFF) || (this_systemid == filter_systemid)) &&
+                               ((filter_tmtype == 0xFF) || (this_tmtype == filter_tmtype))) {
 
-                                count[tp.getSystemID()][tp.getTmType()]++;
-                                amount[tp.getSystemID()][tp.getTmType()] += length+16;
+                                count[this_systemid][this_tmtype]++;
+                                amount[this_systemid][this_tmtype] += length+16;
+                                uint16_t this_frame_counter = tp.getCounter();
+                                int16_t frame_counter_difference = this_frame_counter -
+                                                                   previous_frame_counter[this_systemid][this_tmtype];
+                                if((previous_frame_counter[this_systemid][this_tmtype] != 0xFFFF) &&
+                                   (frame_counter_difference > 1)) {
+                                    // Make an exception for quicklook spectrum packets
+                                    if(!((frame_counter_difference == 6) && (this_systemid == 0x10) && ((this_tmtype & 0xF0) == 0x10))) {
+                                        gaps[this_systemid][this_tmtype]++;
+                                    }
+                                }
+                                previous_frame_counter[this_systemid][this_tmtype] = this_frame_counter;
 
-                                if(((tp.getSystemID() & 0xF0) == 0x80) && (tp.getTmType() == 0xF3)) {
+                                if(((this_systemid & 0xF0) == 0x80) && (this_tmtype == 0xF3)) {
                                     if(((buffer[19] == 0) && (buffer[20] == 0) && (buffer[21] == 0)) ||
                                        ((buffer[22] == 0) && (buffer[23] == 0) && (buffer[24] == 0))) {
-                                        not_coincident[tp.getSystemID() & 0x0F] = true;
+                                        not_coincident[this_systemid & 0x0F] = true;
                                     }
                                 }
 
                                 if(first_systemtime == 0) first_systemtime = tp.getSystemTime();
                                 last_systemtime = tp.getSystemTime();
                             } else {
-                                bad_checksum[tp.getSystemID()][tp.getTmType()]++;
+                                bad_checksum[this_systemid][tp.getTmType()]++;
                             }
 
                             if((((uint64_t)ifs.tellg())*100/size) > percent_completed) {
@@ -149,6 +166,9 @@ int main(int argc, char *argv[])
                             }
                             if(bad_checksum[j][k] > 0) {
                                 printf(", plus %lu with bad checksums", bad_checksum[j][k]);
+                            }
+                            if(gaps[j][k] > 0) {
+                                printf(", plus %lu gaps", gaps[j][k]);
                             }
                             printf("\n");
                         }
