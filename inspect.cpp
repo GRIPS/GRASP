@@ -12,6 +12,7 @@ void help_message(char name[])
     std::cout << "-e             Only inspect event packets (TmType 0xF3 from card cages)\n";
     std::cout << "-fs<SystemID>  Only inspect telemetry packets with this SystemID in decimal\n";
     std::cout << "-ft<TmType>    Only inspect telemetry packets with this TmType in decimal\n";
+    std::cout << "-o<outfile>    Save all valid packets to a separate file\n";
 }
 
 int main(int argc, char *argv[])
@@ -22,6 +23,9 @@ int main(int argc, char *argv[])
 
     uint8_t filter_systemid = 0xFF, filter_tmtype = 0xFF;
     bool filter_events = false;
+
+    bool save_packets = false;
+    char outfile[256];
 
     for(int i = 1; i < argc; i++) {
         if(argv[i][0] == '-') {
@@ -34,6 +38,12 @@ int main(int argc, char *argv[])
                     case 'f':
                         if(argv[i][j+1] == 's') filter_systemid = atoi(&argv[i][j+2]);
                         if(argv[i][j+1] == 't') filter_tmtype = atoi(&argv[i][j+2]);
+                        j = strlen(&argv[i][0]) - 1;
+                        break;
+                    case 'o':
+                        save_packets = true;
+                        strncpy(outfile, &argv[i][j+1], 256);
+                        outfile[255] = 0;
                         j = strlen(&argv[i][0]) - 1;
                         break;
                     case '?':
@@ -68,6 +78,11 @@ int main(int argc, char *argv[])
     uint32_t gaps[256][256];
     Clock first_systemtime = 0, last_systemtime = 0;
     bool not_coincident[16];
+
+    std::ofstream log;
+    if (save_packets) {
+        log.open(outfile, std::ofstream::binary);
+    }
 
     TelemetryPacket tp(NULL);
 
@@ -140,6 +155,10 @@ int main(int argc, char *argv[])
 
                                 if(first_systemtime == 0) first_systemtime = tp.getSystemTime();
                                 last_systemtime = tp.getSystemTime();
+
+                                if(save_packets && log.is_open()) {
+                                    log.write((char *)buffer, length+16);
+                                }
                             } else {
                                 bad_checksum[this_systemid][tp.getTmType()]++;
                             }
@@ -178,6 +197,10 @@ int main(int argc, char *argv[])
                 printf("Elapsed gondola time: %llu (%f minutes)\n\n", last_systemtime - first_systemtime, (last_systemtime - first_systemtime) * 1e-7 / 60);
             }
         }
+    }
+
+    if(save_packets && log.is_open()) {
+        log.close();
     }
 
     return 0;
