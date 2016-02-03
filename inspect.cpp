@@ -127,40 +127,42 @@ int main(int argc, char *argv[])
                             uint8_t this_systemid = tp.getSystemID();
                             uint8_t this_tmtype = tp.getTmType();
 
-                            if(tp.valid() &&
-                               ((!filter_events) || (((this_systemid & 0xF0) == 0x80) && (this_tmtype == 0xF3))) &&
+                            if(((!filter_events) || (((this_systemid & 0xF0) == 0x80) && (this_tmtype == 0xF3))) &&
                                ((filter_systemid == 0xFF) || (this_systemid == filter_systemid)) &&
                                ((filter_tmtype == 0xFF) || (this_tmtype == filter_tmtype))) {
+                                if(tp.valid()) {
+                                    cur += length+15;
 
-                                count[this_systemid][this_tmtype]++;
-                                amount[this_systemid][this_tmtype] += length+16;
-                                uint16_t this_frame_counter = tp.getCounter();
-                                int16_t frame_counter_difference = this_frame_counter -
-                                                                   previous_frame_counter[this_systemid][this_tmtype];
-                                if((previous_frame_counter[this_systemid][this_tmtype] != 0xFFFF) &&
-                                   (frame_counter_difference > 1)) {
-                                    // Make an exception for quicklook spectrum packets
-                                    if(!((frame_counter_difference == 6) && (this_systemid == 0x10) && ((this_tmtype & 0xF0) == 0x10))) {
-                                        gaps[this_systemid][this_tmtype]++;
+                                    count[this_systemid][this_tmtype]++;
+                                    amount[this_systemid][this_tmtype] += length+16;
+                                    uint16_t this_frame_counter = tp.getCounter();
+                                    int16_t frame_counter_difference = this_frame_counter -
+                                                                       previous_frame_counter[this_systemid][this_tmtype];
+                                    if((previous_frame_counter[this_systemid][this_tmtype] != 0xFFFF) &&
+                                       (frame_counter_difference > 1)) {
+                                        // Make an exception for quicklook spectrum packets
+                                        if(!((frame_counter_difference == 6) && (this_systemid == 0x10) && ((this_tmtype & 0xF0) == 0x10))) {
+                                            gaps[this_systemid][this_tmtype]++;
+                                        }
                                     }
-                                }
-                                previous_frame_counter[this_systemid][this_tmtype] = this_frame_counter;
+                                    previous_frame_counter[this_systemid][this_tmtype] = this_frame_counter;
 
-                                if(((this_systemid & 0xF0) == 0x80) && (this_tmtype == 0xF3)) {
-                                    if(((buffer[19] == 0) && (buffer[20] == 0) && (buffer[21] == 0)) ||
-                                       ((buffer[22] == 0) && (buffer[23] == 0) && (buffer[24] == 0))) {
-                                        not_coincident[this_systemid & 0x0F] = true;
+                                    if(((this_systemid & 0xF0) == 0x80) && (this_tmtype == 0xF3)) {
+                                        if(((buffer[19] == 0) && (buffer[20] == 0) && (buffer[21] == 0)) ||
+                                           ((buffer[22] == 0) && (buffer[23] == 0) && (buffer[24] == 0))) {
+                                            not_coincident[this_systemid & 0x0F] = true;
+                                        }
                                     }
-                                }
 
-                                if(first_systemtime == 0) first_systemtime = tp.getSystemTime();
-                                last_systemtime = tp.getSystemTime();
+                                    if(first_systemtime == 0) first_systemtime = tp.getSystemTime();
+                                    last_systemtime = tp.getSystemTime();
 
-                                if(save_packets && log.is_open()) {
-                                    log.write((char *)buffer, length+16);
+                                    if(save_packets && log.is_open()) {
+                                        log.write((char *)buffer, length+16);
+                                    }
+                                } else {
+                                    bad_checksum[this_systemid][tp.getTmType()]++;
                                 }
-                            } else {
-                                bad_checksum[this_systemid][tp.getTmType()]++;
                             }
 
                             if((((uint64_t)ifs.tellg())*100/size) > percent_completed) {
