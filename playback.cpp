@@ -118,18 +118,21 @@ int main(int argc, char *argv[])
 
                             tp = TelemetryPacket(buffer, length+16);
 
-                            if(tp.valid() &&
-                               ((filter_systemid == 0xFF) || (tp.getSystemID() == filter_systemid)) &&
+                            if(((filter_systemid == 0xFF) || (tp.getSystemID() == filter_systemid)) &&
                                ((filter_tmtype == 0xFF) || (tp.getTmType() == filter_tmtype))) {
-                                telSender.send(&tp);
+                                if(tp.valid()) {
+                                    telSender.send(&tp);
 
-                                if ((last_systemtime != 0) && (last_systemtime < tp.getSystemTime())) {
-                                    usleep((tp.getSystemTime() - last_systemtime) / 10 / speed_factor);
-                                    last_systemtime = tp.getSystemTime();
+                                    cur += length+15;
+
+                                    if ((last_systemtime != 0) && (last_systemtime < tp.getSystemTime())) {
+                                        usleep((tp.getSystemTime() - last_systemtime) / 10 / speed_factor);
+                                        last_systemtime = tp.getSystemTime();
+                                    }
+                                    if (last_systemtime == 0) last_systemtime = tp.getSystemTime();
+                                } else {
+                                    fprintf(stderr, "Invalid checksum: SystemId 0x%02x, TmType 0x%02x\n", tp.getSystemID(), tp.getTmType());
                                 }
-                                if (last_systemtime == 0) last_systemtime = tp.getSystemTime();
-                            } else {
-                                fprintf(stderr, "Invalid checksum: SystemId 0x%02x, TmType 0x%02x\n", tp.getSystemID(), tp.getTmType());
                             }
 
                             if((((uint64_t)ifs.tellg())*100/size) > percent_completed) {
