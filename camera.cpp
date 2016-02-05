@@ -1,4 +1,4 @@
-#define SAVE_1_OF_EVERY_N 10
+#define SAVE_1_OF_EVERY_N 1
 
 #define TIMEOUT1 125
 #define TIMEOUT2 60
@@ -20,6 +20,7 @@
 #include <cstdlib>
 #include <sys/time.h>
 #include <sys/syscall.h>
+#include <sys/stat.h>
 #include <fstream>
 #include <errno.h>
 #include <unistd.h>
@@ -56,12 +57,11 @@ using namespace std; //the global namespace, CCfits used locally in saveim
 /* =============================================================================================
     Global Variables
    ========================================================================================== */
-unsigned long NUMOFCAMERAS = 0;        // Actual number of cameras detected.
 unsigned int TICKS_PER_SECOND; // Total number of ticks per second
 volatile unsigned int CURRENT_TICK = 0;
 bool PAUSEPROGRAM = false;
 volatile bool TRANSMIT_NEXT_PY_IMAGE = false, TRANSMIT_NEXT_R_IMAGE = false;
-tCamera CAMERAS[MAXNUMOFCAMERAS];
+tCamera CAMERAS[MAX_CAMERAS];
 timer_t TIMER; //timer identifier
 struct info PY_ANALYSIS, R_ANALYSIS;
 // __________________________________________________________________________________________end
@@ -85,9 +85,9 @@ bool is_pyc(tCamera *Camera);
 int create_timer();
 int arm_timer();
 int disarm_timer();
-int next_camera();
 
-void spawn_thread(int x);
+void tick_handler(int x);
+void spawn_thread(tCamera *Camera);
 void *snap_thread(void *cam);
 void handle_wait(tCamera *Camera, tPvErr &errCode, int timeout2);
 void handle_timeout(tCamera *Camera);
@@ -119,8 +119,12 @@ int camera_main()
     //create handler
     struct sigaction act, oldact;
     memset(&act, 0, sizeof(struct sigaction));
-    act.sa_handler = spawn_thread;
+    act.sa_handler = tick_handler;
     sigaction(10, &act, &oldact);
+
+    memset(CAMERAS, 0, MAX_CAMERAS * sizeof(tCamera));
+    CAMERAS[0].UID = PY_CAM_ID;
+    CAMERAS[1].UID = R_CAM_ID;
 
     memset(&PY_ANALYSIS, 0, sizeof(struct info));
     memset(&R_ANALYSIS, 0, sizeof(struct info));
@@ -136,16 +140,16 @@ int camera_main()
                 synchronize_settings();
                 // Set up cameras.
                 bool setupSuccess = true;
-                for(unsigned int i = 0; i < NUMOFCAMERAS; i++) {
-                    if(!CameraSetup(&CAMERAS[i]))
-                        setupSuccess = false;
+                for(unsigned int i = 0; i < MAX_CAMERAS; i++) {
+                    if(CAMERAS[i].Handle)
+                        setupSuccess &= CameraSetup(&CAMERAS[i]);
                 }
                 if(setupSuccess) {
                     // Start streaming from cameras.
                     bool startSuccess = true;
-                    for(unsigned int j = 0; j < NUMOFCAMERAS; j++) {
-                        if(!CameraStart(&CAMERAS[j]))
-                            startSuccess = false;
+                    for(unsigned int i = 0; i < MAX_CAMERAS; i++) {
+                        if(CAMERAS[i].Handle)
+                            startSuccess &= CameraStart(&CAMERAS[i]);
                     }
                     if(!startSuccess) {
                         printf("Failed to start streaming from cameras.\n");
@@ -160,8 +164,9 @@ int camera_main()
                     }
 
                     // Unsetup the cameras.
-                    for(unsigned int k = 0; k < NUMOFCAMERAS; k++) {
-                        CameraUnsetup(&CAMERAS[k]);
+                    for(unsigned int i = 0; i < MAX_CAMERAS; i++) {
+                        if(CAMERAS[i].Handle)
+                            CameraUnsetup(&CAMERAS[i]);
                     }
                 } else
                     printf("Failed to set up cameras.\n");
@@ -222,20 +227,20 @@ bool getTemp(tCamera *Camera)
     tPvFloat32 T_MB = 0;
     //tPvFloat32 T_CCD = 0;
 
-    const char* whichfile;
-    ofstream tempfile;
-    if(is_pyc(Camera)) {
-        whichfile = "PY_temps.txt";
-    } else {
-        whichfile = "H_temps.txt";
-    }
-    tempfile.open(whichfile, ios::app);
+    //const char* whichfile;
+    //ofstream tempfile;
+    //if(is_pyc(Camera)) {
+    //    whichfile = "PY_temps.txt";
+    //} else {
+    //    whichfile = "H_temps.txt";
+    //}
+    //tempfile.open(whichfile, ios::app);
 
     if(PvAttrFloat32Get(Camera->Handle, "DeviceTemperatureMainboard", &T_MB) == 0) {
         //PvAttrFloat32Get(Camera->Handle, "DeviceTemperatureSensor", &T_CCD);
         //cout<<"T_MB = "<<T_MB<<endl;
         //cout<<"T_CCD = "<<T_CCD<<endl;
-        tempfile << T_MB <<endl;
+        //tempfile << T_MB <<endl;
 
         if(is_pyc(Camera)) {
             temp_py = T_MB;
@@ -246,7 +251,7 @@ bool getTemp(tCamera *Camera)
         return true;
     } else {
         cout<<"Temp error\n";
-        tempfile << "Temp error"<< endl;
+        //tempfile << "Temp error"<< endl;
         //PrintError(PvAttrFloat32Get(Camera->Handle, "DeviceTemperatureMainboard", &T_MB));
         //PrintError(PvAttrFloat32Get(Camera->Handle, "DeviceTemperatureSensor", &T_CCD));
         //cout<<"T_MB = "<<T_MB<<endl;
@@ -290,32 +295,18 @@ void CameraEventCB(void* Context, tPvInterface Interface, tPvLinkEvent Event,
    ========================================================================================== */
 bool CameraGrab()
 {
-    int i = 0;
-    const char* IP1 = "169.254.100.2";
-    const char* IP2 = "169.254.200.2";
-
-    //try 1st camera
-    memset(&CAMERAS[i], 0, sizeof(tCamera));
-    if(!PvCameraOpenByAddr(inet_addr(IP1), ePvAccessMaster, &(CAMERAS[i].Handle))) {
-        CAMERAS[i].UID = PY_CAM_ID;
-        i++;
-    } else {
+    //try PY camera
+    if(PvCameraOpenByAddr(inet_addr(IP1), ePvAccessMaster, &(CAMERAS[0].Handle)) != ePvErrSuccess) {
         cout<<"couldn't open PY camera\n";
     }
-    //try 2nd camera
-    memset(&CAMERAS[i], 0, sizeof(tCamera));
-    if(!PvCameraOpenByAddr(inet_addr(IP2), ePvAccessMaster, &(CAMERAS[i].Handle))) {
-        CAMERAS[i].UID = R_CAM_ID;
-        i++;
-    } else {
+    //try R camera
+    if(PvCameraOpenByAddr(inet_addr(IP2), ePvAccessMaster, &(CAMERAS[1].Handle)) != ePvErrSuccess) {
         cout<<"couldn't open R camera\n";
     }
 
-    NUMOFCAMERAS = i;
-
     g_running_camera_main = 1;
 
-    return i > 0;
+    return (CAMERAS[0].Handle != NULL) || (CAMERAS[1].Handle != NULL);
 }
 // __________________________________________________________________________________________end
 
@@ -325,17 +316,13 @@ bool CameraGrab()
    ========================================================================================== */
 void synchronize_settings()
 {
-    for(unsigned int i = 0; i < NUMOFCAMERAS; i++) {
-        if(is_pyc(&CAMERAS[i])) {
-            CAMERAS[i].Rate = current_settings.PY_rate;
-            CAMERAS[i].ExposureLength = current_settings.PY_exposure;
-            CAMERAS[i].Gain = current_settings.PY_gain;
-        } else {
-            CAMERAS[i].Rate = current_settings.R_rate;
-            CAMERAS[i].ExposureLength = current_settings.R_exposure;
-            CAMERAS[i].Gain = current_settings.R_gain;
-        }
-    }
+    CAMERAS[0].Rate = current_settings.PY_rate;
+    CAMERAS[0].ExposureLength = current_settings.PY_exposure;
+    CAMERAS[0].Gain = current_settings.PY_gain;
+
+    CAMERAS[1].Rate = current_settings.R_rate;
+    CAMERAS[1].ExposureLength = current_settings.R_exposure;
+    CAMERAS[1].Gain = current_settings.R_gain;
 }
 // __________________________________________________________________________________________end
 
@@ -400,9 +387,9 @@ int create_timer()
    ========================================================================================== */
 int arm_timer()
 {
-    TICKS_PER_SECOND = 0;
-    for(unsigned int i = 0; i < NUMOFCAMERAS; i++) {
-        TICKS_PER_SECOND += CAMERAS[i].Rate;
+    TICKS_PER_SECOND = 1;
+    for(unsigned int i = 0; i < MAX_CAMERAS; i++) {
+        TICKS_PER_SECOND *= CAMERAS[i].Rate;
     }
     cout << "This is the ticks per second: " << TICKS_PER_SECOND << "\n";
 
@@ -512,16 +499,15 @@ void CameraStop(tCamera *Camera)
 
 
 /*=============================================================================================
-  Determines which camera to snap next
-  Currently assumes two cameras and alternates between them until one camera is "done"
-  Returns 0 or 1
+  Handle ticks by calling the thread spawner at the appropriate multiples
   ========================================================================================== */
-int next_camera()
+void tick_handler(int x)
 {
-    if(CURRENT_TICK < 2 * MIN(CAMERAS[0].Rate, CAMERAS[1].Rate)) {
-        return CURRENT_TICK % 2;
-    }
-    return CAMERAS[0].Rate > CAMERAS[1].Rate ? 0 : 1;
+    if((CURRENT_TICK % CAMERAS[1].Rate) == 0) spawn_thread(&CAMERAS[0]);
+    if((CURRENT_TICK % CAMERAS[0].Rate) == 0) spawn_thread(&CAMERAS[1]);
+
+    //update CURRENT_TICK
+    CURRENT_TICK = ((CURRENT_TICK + 1) % TICKS_PER_SECOND);
 }
 // _________________________________________________________________________________________end
 
@@ -529,13 +515,17 @@ int next_camera()
 /*=============================================================================================
   spawn threads for snapping/processing
   ========================================================================================== */
-void spawn_thread(int x)
+void spawn_thread(tCamera *Camera)
 {
+    if(!Camera->Handle) {
+        tPvCameraInfoEx pInfo;
+        if(PvCameraInfoEx(Camera->UID, &pInfo, sizeof(tPvCameraInfoEx)) == ePvErrSuccess) {
+            cout << "Camera is plugged in but not opened, so bailing out\n";
+            g_running_camera_main = 0;
+        }
+        return;
+    }
     if(!PAUSEPROGRAM && g_running_camera_main) {
-        //which camera snaps?
-        tCamera *Camera = &CAMERAS[next_camera()];
-
-        //spawn thread based on camera and idx
         int thread_err;
         pthread_attr_t attr;                                            //attribute object
         pthread_attr_init(&attr);
@@ -555,9 +545,6 @@ void spawn_thread(int x)
         //update thread and buffer indexes
         Camera->BufferIndex = Camera->idx; //the active buffer = this thread buffer
         Camera->idx = ((Camera->idx + 1) % FRAMESCOUNT);
-
-        //update CURRENT_TICK
-        CURRENT_TICK = ((CURRENT_TICK + 1) % TICKS_PER_SECOND);
     }
 }
 // _________________________________________________________________________________________end
@@ -592,11 +579,18 @@ void *snap_thread(void *cam)
             clock_gettime(CLOCK_REALTIME, &Camera->ClockPC[Camera->BufferIndex]);
             Camera->snapcount++;
             Camera->waitFlag= true;
+
+            Camera->ClockOEB1[Camera->BufferIndex] = oeb_get_clock();
+
             if(PvCommandRun(Camera->Handle, "FrameStartTriggerSoftware") != ePvErrSuccess) {
                 cout<<"Trigger Software Error: ";
                 PrintError(errCode);
             }
+
             errCode = PvCaptureWaitForFrameDone(Camera->Handle, &(Camera->Frames[Camera->BufferIndex]), TIMEOUT1);
+
+            Camera->ClockOEB2[Camera->BufferIndex] = oeb_get_clock();
+
             handle_wait(Camera, errCode, TIMEOUT2); //checks and updates waitflag and errCode
 
             //Process: if done waiting, no timeout, successful frame & non-zero bitdepth
@@ -696,24 +690,36 @@ void Process(tCamera *Camera)
     unsigned int localIndex = Camera->BufferIndex;
 
     if(py) {
-        Camera->ClockOEB[localIndex] = oeb_get_pyc();
+        Camera->ClockTrigger[localIndex] = oeb_get_pyc();
         py_image_counter++;
     } else {
-        Camera->ClockOEB[localIndex] = oeb_get_rc();
+        Camera->ClockTrigger[localIndex] = oeb_get_rc();
         roll_image_counter++;
     }
 
+    char directory[128];
+    char subdirectory[12];
     char filename[128];
+    struct stat st = {0};
+
     if(Camera->WantToSave) {
         char timestamp[14];
         struct tm *capturetime;
-        capturetime = localtime(&Camera->ClockPC[localIndex].tv_sec);
+        capturetime = gmtime(&Camera->ClockPC[localIndex].tv_sec);
         strftime(timestamp, 14, "%y%m%d_%H%M%S", capturetime);
+
+        strftime(subdirectory, 12, "%Y%m%d_%H", capturetime);
+        sprintf(directory, "%s/%s", save_locations[(Camera->pcount - 1) % 3], subdirectory);
+        // Make the appropriate directory if it doesn't exist
+        if (stat(directory, &st) == -1) {
+            mkdir(directory, 0755);
+        }
+
         sprintf(filename, "%s/%s_%s_%06ld_%012lx.fits",
-                "images", //FIXME: flat storage will become unwieldy!
+                directory,
                 (py ? "py" : "r"), timestamp,
                 Camera->ClockPC[localIndex].tv_nsec/1000l,
-                Camera->ClockOEB[localIndex]);
+                Camera->ClockTrigger[localIndex]);
     }
 
     if(MODE_TIMING) stopwatch(watch);
@@ -727,7 +733,7 @@ void Process(tCamera *Camera)
     params val;
     init_params(val, Camera->FrameWidth, Camera->FrameHeight);
     val.UID = Camera->UID;
-    val.clock = Camera->ClockOEB[localIndex];
+    val.clock = Camera->ClockTrigger[localIndex];
 
     //timeval t;
     //2. analyze live or test image?
@@ -758,6 +764,9 @@ void Process(tCamera *Camera)
     if(MODE_TIMING) cout << (py ? "Pitch-yaw" : "Roll")
                          << " image ready in " << stopwatch(watch) << " us\n";
 
+    // If not in pointing mode, only proceed with analysis on one frame each second (per camera)
+    if((MODE_POINTING && py) || ((Camera->pcount % Camera->Rate) == 0)) {
+
     if(MODE_TIMING) stopwatch(watch);
     if(py) {
         analyzePY(im, val, imarr);
@@ -766,7 +775,7 @@ void Process(tCamera *Camera)
     }
     if(MODE_TIMING) cout << "  Analysis took " << stopwatch(watch) << " us\n";
 
-    if(MODE_AUTOMATIC && ((Camera->pcount % Camera->Rate) == 0)) {
+    if(MODE_AUTOMATIC) {
         transmit_image(val, im, imarr);
     }
     if(py) {
@@ -800,6 +809,8 @@ void Process(tCamera *Camera)
     if(py && val.drawline) {
         drawline(imarr, val, im);
     }
+
+    } // end of analysis
 
     //3. save?
     if(Camera->WantToSave) {
@@ -843,6 +854,15 @@ void transmit_image(params &val, info &im, valarray<unsigned char> &imarr)
    ========================================================================================== */
 bool saveim(tCamera *Camera, valarray<unsigned char> &imarr, const char* filename)
 {
+    static int saves_in_progress = 0;
+
+    if ((saves_in_progress > 4) && !is_pyc(Camera)) {
+        std::cerr << "Skipping saving of roll image because " << saves_in_progress << " saves already in progress\n";
+        return false;
+    }
+
+    saves_in_progress++;
+
     using namespace CCfits;
     //using std::valarray;
 
@@ -851,6 +871,8 @@ bool saveim(tCamera *Camera, valarray<unsigned char> &imarr, const char* filenam
     //create pointer to fits object
     std::auto_ptr<FITS> pFits(0);
     //std::valarray<unsigned char> imarr((char*)Camera->Frames[j].ImageBuffer, nelements);
+
+    unsigned int localIndex = Camera->BufferIndex;
 
     //for running loop tests
     remove(filename);
@@ -872,8 +894,15 @@ bool saveim(tCamera *Camera, valarray<unsigned char> &imarr, const char* filenam
         pFits->pHDU().addKey("Save Count",(int)Camera->savecount, "Num of Saved Images");
         pFits->pHDU().addKey("Snap Count",(int)Camera->snapcount, "Num of SNAPS");
         pFits->pHDU().addKey("Exposure",(long)Camera->ExposureLength, "for cameanalyzera");
-        pFits->pHDU().addKey("Gain",(long)Camera->Gain, "Gain (dB)");
+        pFits->pHDU().addKey("Gain",(int)Camera->Gain, "Gain (dB)");
+        pFits->pHDU().addKey("Rate",(int)Camera->Rate, "Number of frames per second");
         pFits->pHDU().addKey("filename", filename, "Name of the file");
+
+        pFits->pHDU().addKey("PC_SEC", (long)Camera->ClockPC[localIndex].tv_sec, "PC time (seconds)");
+        pFits->pHDU().addKey("PC_NSEC", (long)Camera->ClockPC[localIndex].tv_nsec, "PC time (nanoseconds)");
+        pFits->pHDU().addKey("GT_TRIG", (long)Camera->ClockTrigger[localIndex], "Gondola time of camera trigger pulse");
+        pFits->pHDU().addKey("GT_OEB1", (long)Camera->ClockOEB1[localIndex], "Gondola time before snap");
+        pFits->pHDU().addKey("GT_OEB2", (long)Camera->ClockOEB2[localIndex], "Gondola time after snap");
 
         //switch to make the appropriate ascii tables for PY or H from their info structs
         //pFits->pHDU().addKey("xp", im.xp, "x coordinates");
@@ -896,6 +925,27 @@ bool saveim(tCamera *Camera, valarray<unsigned char> &imarr, const char* filenam
     string newName ("Raw Frame");
     long fpixel(1);
 
+    if (MODE_DECIMATE) {
+        if (is_pyc(Camera)) {
+            // For pitch-yaw images at N per second, keep one key frame per second and throw out (N-2)/(N-1) rows of the other frames
+            int mod = (Camera->pcount % Camera->Rate);
+            if ((Camera->Rate >= 3) && (mod != 0)) {
+                for (unsigned int row = 0; row < Camera->FrameHeight; row++) {
+                    if ((row % (Camera->Rate - 1)) != (mod - 1)) {
+                        memset(&imarr[row * Camera->FrameWidth], 0, Camera->FrameWidth);
+                    }
+                }
+            }
+        } else {
+            // For roll images, simply keep only 1 out of every 10 rows
+            for (unsigned int row = 0; row < Camera->FrameHeight; row++) {
+                if ((row % 10) != (Camera->pcount % 10)) {
+                    memset(&imarr[row * Camera->FrameWidth], 0, Camera->FrameWidth);
+                }
+            }
+        }
+    }
+
     try {
         imageExt = pFits->addImage(newName, BYTE_IMG, extAx, 1);
         imageExt->write(fpixel, Camera->FrameWidth*Camera->FrameHeight, imarr);    //write extension
@@ -903,6 +953,8 @@ bool saveim(tCamera *Camera, valarray<unsigned char> &imarr, const char* filenam
     } catch (FitsException) {
         std::cout<<"Couldn't write image to extension\n";
     }
+
+    saves_in_progress--;
 
     return true;
 }
@@ -1086,19 +1138,21 @@ void queueErrorHandling(tCamera *Camera)
    ========================================================================================== */
 void CameraUnsetup(tCamera *Camera)
 {
-    printf("Preparing to unsetup camera with ID %lu\n", Camera->UID);
-    printf("\nClearing the queue.\n");
-    // Dequeue all the frames still queued (causes a block until dequeue finishes).
-    PvCaptureQueueClear(Camera->Handle);
-    // Close the camera.
-    printf("Closing the camera.\n");
-    PvCameraClose(Camera->Handle);
+    if(Camera->Handle) {
+        printf("Preparing to unsetup camera with ID %lu\n", Camera->UID);
+        printf("\nClearing the queue.\n");
+        // Dequeue all the frames still queued (causes a block until dequeue finishes).
+        PvCaptureQueueClear(Camera->Handle);
+        // Close the camera.
+        printf("Closing the camera.\n");
+        PvCameraClose(Camera->Handle);
 
-    // Delete the allocated buffer(s).
-    for(int i = 0; i < FRAMESCOUNT; i++)
-        delete [] (unsigned char*)Camera->Frames[i].ImageBuffer;
+        // Delete the allocated buffer(s).
+        for(int i = 0; i < FRAMESCOUNT; i++)
+            delete [] (unsigned char*)Camera->Frames[i].ImageBuffer;
 
-    Camera->Handle = NULL;
+        Camera->Handle = NULL;
+    }
 }
 // __________________________________________________________________________________________end
 
@@ -1163,7 +1217,7 @@ void RestartImCap(tCamera *Camera)
 void DisplayParameters()
 {
     printf("\n");
-    for(unsigned int i = 0; i < NUMOFCAMERAS; i++) {
+    for(unsigned int i = 0; i < MAX_CAMERAS; i++) {
         printf("Displaying settings for camera with ID %lu\n", CAMERAS[i].UID);
         printf("----------\n");
         printf("Images per second: %d\n", CAMERAS[i].Rate);

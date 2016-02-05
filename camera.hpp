@@ -1,7 +1,9 @@
 #ifndef _CAMERA_HPP_
 #define _CAMERA_HPP_
 
-#define MAXNUMOFCAMERAS 2
+#define MAX_CAMERAS 2
+#define IP1 "169.254.100.2"
+#define IP2 "169.254.200.2"
 
 #define FRAMESCOUNT 5
 
@@ -34,7 +36,9 @@ struct tCamera
     unsigned long    Gain;
 
     timespec         ClockPC[FRAMESCOUNT];
-    uint64_t         ClockOEB[FRAMESCOUNT]; //from the odds & ends board
+    uint64_t         ClockOEB1[FRAMESCOUNT]; //from the odds & ends board
+    uint64_t         ClockOEB2[FRAMESCOUNT]; //from the odds & ends board
+    uint64_t         ClockTrigger[FRAMESCOUNT]; //from the odds & ends board
 
     tPvFrame         Frames[FRAMESCOUNT];
     //valarray<unsigned char> imarr[FRAMESCOUNT]; //each valarray is sized 0, resized in setup
@@ -75,7 +79,7 @@ struct tCamera
 
 //global variables found in camera.cpp
 extern volatile bool TRANSMIT_NEXT_PY_IMAGE, TRANSMIT_NEXT_R_IMAGE;
-extern tCamera CAMERAS[MAXNUMOFCAMERAS];
+extern tCamera CAMERAS[MAX_CAMERAS];
 extern struct info PY_ANALYSIS, R_ANALYSIS;
 
 #endif

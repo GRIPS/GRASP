@@ -1,7 +1,10 @@
 #define MAX_THREADS 30
-#define LOG_PACKETS false
+#define LOG_PACKETS true
 
-#define SAVE_LOCATION "./"
+#define LOG_LOCATION "/data0/logs"
+#define SAVE_LOCATION1 "/data0/images"
+#define SAVE_LOCATION2 "/data1/images"
+#define SAVE_LOCATION3 "/data2/images"
 
 //Sleep settings (microseconds)
 #define USLEEP_KILL            3000000 // how long to wait before terminating threads
@@ -46,13 +49,15 @@
 #define KEY_NULL                 0x00
 
 //ASP commands
+#define KEY_POINTING_OFF         0x80
+#define KEY_POINTING_ON          0x81
 #define KEY_SET_CLOCK_FOR_SYNC   0x99
-#define KEY_PYC_OFF              0xA0 //not yet implemented
-#define KEY_PYC_ON               0xA1 //not yet implemented
-#define KEY_RC_OFF               0xB0 //not yet implemented
-#define KEY_RC_ON                0xB1 //not yet implemented
-#define KEY_IRS_OFF              0xC0 //not yet implemented
-#define KEY_IRS_ON               0xC1 //not yet implemented
+#define KEY_PYC_SAVE_OFF         0xA0
+#define KEY_PYC_SAVE_ON          0xA1
+#define KEY_RC_SAVE_OFF          0xB0
+#define KEY_RC_SAVE_ON           0xB1
+#define KEY_DECIMATE_OFF         0xC0
+#define KEY_DECIMATE_ON          0xC1
 #define KEY_TM_SEND_SETTINGS     0xD0
 #define KEY_TM_CADENCE_HK        0xD1
 #define KEY_TM_CADENCE_A2D       0xD2
@@ -79,6 +84,7 @@
 #include <ctime>        /* time_t, struct tm, time, gmtime */
 #include <iostream>
 #include <string>
+#include <sys/statvfs.h> /* for statvfs */
 #include <fstream>
 
 #include "UDPSender.hpp"
@@ -103,12 +109,15 @@ float grid_rotation_rate = -1;
 struct dmminfo DMM1;
 float temp_py = 0, temp_roll = 0, temp_mb = 0;
 char ip_tm[20];
+char save_locations[3][100] = { SAVE_LOCATION1, SAVE_LOCATION2, SAVE_LOCATION3 };
 
 // global mode variables
 bool MODE_AUTOMATIC = false; //used by camera main
 bool MODE_COMPRESS = false; //used by camera main
+bool MODE_DECIMATE = false; //used by camera main
 bool MODE_MOCK = false; //used by camera main
 bool MODE_NETWORK = false;
+bool MODE_POINTING = false; //used by camera main
 bool MODE_TIMING = false; //used by camera main
 bool MODE_UNCONNECTED = false;
 bool MODE_VERBOSE = false; //used by camera main
@@ -160,6 +169,9 @@ void *IRSensorThread(void *threadargs);
 
 void *CameraMainThread(void *threadargs);
 
+void writeCurrentUT(char *buffer);
+void printLogTimestamp();
+
 template <class T>
 bool set_if_different(T& variable, T value); //returns true if the value is different
 
@@ -172,6 +184,26 @@ void sig_handler(int signum)
         g_running = 0;
         g_running_camera_main = 0;
     }
+}
+
+void writeCurrentUT(char *buffer)
+{
+    time_t now;
+    time(&now);
+    struct tm *now_tm;
+    now_tm = gmtime(&now);
+    strftime(buffer, 14, "%y%m%d_%H%M%S", now_tm);
+}
+
+void printLogTimestamp()
+{
+    time_t now;
+    time(&now);
+    struct tm *now_tm;
+    now_tm = gmtime(&now);
+    char timestamp[23];
+    strftime(timestamp, 23, "%Y-%m-%d %H:%M:%S UT", now_tm);
+    printf("[%s] OEB:%ld\n", timestamp, oeb_get_clock());
 }
 
 template <class T>
@@ -255,19 +287,18 @@ void *TelemetrySenderThread(void *threadargs)
     long tid = (long)((struct Thread_data *)threadargs)->thread_id;
     printf("TelemetrySender thread #%ld!\n", tid);
 
-/*
     char timestamp[14];
     char filename[128];
     std::ofstream log;
 
     if (LOG_PACKETS) {
         writeCurrentUT(timestamp);
-        sprintf(filename, "%slog_tm_%s.bin", SAVE_LOCATION, timestamp);
+        sprintf(filename, "%s/tm_%s.bin", LOG_LOCATION, timestamp);
         filename[128 - 1] = '\0';
-        printf("Creating telemetry log file %s \n",filename);
+        printf("Creating telemetry log file %s\n",filename);
         log.open(filename, std::ofstream::binary);
     }
-*/
+
     TelemetrySender telSender(ip_tm, (unsigned short) PORT_TM);
 
     while(!stop_message[tid])
@@ -279,23 +310,25 @@ void *TelemetrySenderThread(void *threadargs)
             tm_packet_queue >> tp;
             telSender.send( &tp );
             if(MODE_NETWORK) std::cout << "TelemetrySender: " << tp.getLength() << " bytes, " << tp << std::endl;
-/*
+
             if (LOG_PACKETS && log.is_open()) {
                 uint16_t length = tp.getLength();
                 uint8_t *payload = new uint8_t[length];
                 tp.outputTo(payload);
                 log.write((char *)payload, length);
                 delete payload;
-                //log.flush();
             }
-*/
+        } else {
+            if (LOG_PACKETS && log.is_open()) {
+                log.flush();
+            }
         }
     }
 
     printf("TelemetrySender thread #%ld exiting\n", tid);
-/*
+
     if (LOG_PACKETS && log.is_open()) log.close();
-*/
+
     started[tid] = false;
     pthread_exit( NULL );
 }
@@ -307,6 +340,15 @@ void *TelemetryHousekeepingThread(void *threadargs)
 
     uint32_t tm_frame_sequence_number = 0;
 
+    FILE* fp = fopen("/proc/stat", "r");
+    long user1, nice1, system1, idle1;
+    fscanf(fp, "%*s %ld %ld %ld %ld", &user1, &nice1, &system1, &idle1);
+    fclose(fp);
+
+    long user2, nice2, system2, idle2;
+
+    double free0, free1, free2, min_free = 0, min_free_previous = 0, days = -1;
+
     while(!stop_message[tid])
     {
         usleep_force(current_settings.cadence_housekeeping * 1000000);
@@ -317,9 +359,55 @@ void *TelemetryHousekeepingThread(void *threadargs)
         uint8_t status_bitfield = 0;
         bitwrite(&status_bitfield, 0, 1, CAMERAS[0].Handle != NULL);
         bitwrite(&status_bitfield, 1, 1, CAMERAS[1].Handle != NULL);
+        // bit 2 is connection to IR sensor
+        // bit 3 is TBD
+        bitwrite(&status_bitfield, 4, 1, CAMERAS[0].WantToSave);
+        bitwrite(&status_bitfield, 5, 1, CAMERAS[1].WantToSave);
+        bitwrite(&status_bitfield, 6, 1, MODE_DECIMATE);
+        bitwrite(&status_bitfield, 7, 1, MODE_POINTING);
         tp << status_bitfield << latest_command_key;
 
-        tp << (int16_t)(temp_py * 100) << (int16_t)(temp_roll * 100) << (int16_t)(temp_mb * 100);
+        // Temperatures
+        tp << (int16_t)(temp_py * 100) << (int16_t)(temp_roll * 100);
+        
+        // Estimate of days remaining of disk space
+        struct statvfs vfs;
+        statvfs("/data0", &vfs);
+        free0 = (double)vfs.f_bavail / vfs.f_blocks;
+        statvfs("/data1", &vfs);
+        free1 = (double)vfs.f_bavail / vfs.f_blocks;
+        statvfs("/data2", &vfs);
+        free2 = (double)vfs.f_bavail / vfs.f_blocks;
+        if ((tm_frame_sequence_number % 10) == 0) {
+            min_free_previous = min_free;
+            min_free = MIN(MIN(free0, free1), free2);
+            if (min_free_previous != 0) {
+                days = (10. * current_settings.cadence_housekeeping) / (min_free_previous - min_free) / 86400.;
+            }
+        }
+        tp << (int16_t)(days * 100);
+
+        // CPU usage
+        fp = fopen("/proc/stat", "r");
+        fscanf(fp, "%*s %ld %ld %ld %ld", &user2, &nice2, &system2, &idle2);
+        fclose(fp);
+        tp << (uint16_t)(100 * 100 * (1 - (double)(idle2 - idle1) / (user2 + nice2 + system2 + idle2 - user1 - nice1 - system1 - idle1)));
+        user1 = user2;
+        nice1 = nice2;
+        system1 = system2;
+        idle1 = idle2;
+
+        // Disk usage
+        tp << (uint16_t)(100 * 100 * (1 - free0));
+        tp << (uint16_t)(100 * 100 * (1 - free1));
+        tp << (uint16_t)(100 * 100 * (1 - free2));
+
+        // Uptime
+        fp = fopen("/proc/uptime", "r");
+        float uptime;
+        fscanf(fp, "%f", &uptime);
+        fclose(fp);
+        tp << (uint32_t)uptime;
 
         tm_packet_queue << tp;
     }
@@ -369,7 +457,11 @@ void *TelemetryScienceThread(void *threadargs)
 
     while(!stop_message[tid])
     {
-        usleep_force(current_settings.cadence_science * 1000000);
+        if (MODE_POINTING) {
+            usleep_force(1000000 / current_settings.PY_rate);
+        } else {
+            usleep_force(current_settings.cadence_science * 1000000);
+        }
         tm_frame_sequence_number++;
 
         TelemetryPacket tp(SYS_ID_ASP, TM_SCIENCE, tm_frame_sequence_number, oeb_get_clock());
@@ -380,6 +472,11 @@ void *TelemetryScienceThread(void *threadargs)
         bitwrite(&quality_bitfield, 0, 1, PY_ANALYSIS.there[0]);
         bitwrite(&quality_bitfield, 1, 1, PY_ANALYSIS.there[1]);
         bitwrite(&quality_bitfield, 2, 1, PY_ANALYSIS.there[2]);
+        // bit 3 is fiducial lock
+        bitwrite(&quality_bitfield, 4, 1, R_ANALYSIS.good_contrast);
+        bitwrite(&quality_bitfield, 5, 1, R_ANALYSIS.good_black_level);
+        // bit 6 is PY-determined rotating
+        bitwrite(&quality_bitfield, 7, 1, grid_rotation_rate > 5);
         tp << quality_bitfield;
 
         uint8_t count1 = py_image_counter;
@@ -388,14 +485,24 @@ void *TelemetryScienceThread(void *threadargs)
         py_image_counter = 0;
         roll_image_counter = 0;
 
-        uint8_t num_fiducials = 0;
+        uint8_t num_fiducials = PY_ANALYSIS.nfid;
         tp << num_fiducials;
 
-        float offset_pitch = 0, uncert_pitch = 0;
-        float offset_yaw = 0, uncert_yaw = 0;
-        tp << offset_pitch << uncert_pitch << offset_yaw << uncert_yaw;
+        float offset_pitch = 0, rotated_offset_pitch = 0, uncert_pitch = 0;
+        float offset_yaw = 0, rotated_offset_yaw = 0, uncert_yaw = 0;
+        // Assume that if there are two Suns, then the brighter one is the main Sun
+        if (PY_ANALYSIS.there[1]) {
+            offset_pitch = -(PY_ANALYSIS.xp[0] - current_settings.screen_center_x) * current_settings.arcsec_per_pixel_x / 3600. * M_PI / 180.;
+            offset_yaw = (PY_ANALYSIS.yp[0] - current_settings.screen_center_y) * current_settings.arcsec_per_pixel_y / 3600. * M_PI / 180.;
+            rotated_offset_pitch = offset_pitch * cos(current_settings.screen_rotation * M_PI / 180) +
+                                   - offset_yaw * sin(current_settings.screen_rotation * M_PI / 180);
+            rotated_offset_yaw = offset_pitch * sin(current_settings.screen_rotation * M_PI / 180) +
+                                 offset_yaw * cos(current_settings.screen_rotation * M_PI / 180);
+            rotated_offset_yaw *= -1; // hack to get into Pascal's coordinate system
+        }
+        tp << rotated_offset_pitch << uncert_pitch << rotated_offset_yaw << uncert_yaw;
 
-        float new_grid_orientation = 0;
+        float new_grid_orientation = PY_ANALYSIS.theta;
         float delta_grid_orientation = new_grid_orientation - old_grid_orientation;
         if (delta_grid_orientation < 0) delta_grid_orientation += 360.;
         tp << new_grid_orientation << delta_grid_orientation;
@@ -416,11 +523,13 @@ void *TelemetryScienceThread(void *threadargs)
             tp << (uint16_t)(PY_ANALYSIS.xp[i] * 10) << (uint16_t)(PY_ANALYSIS.yp[i] * 10);
         }
 
-        uint16_t fiducial_x[4], fiducial_y[4];
-        memset(fiducial_x, 0, 4 * sizeof(uint16_t));
-        memset(fiducial_y, 0, 4 * sizeof(uint16_t));
         for (int i = 0; i < 4; i++) {
-            tp << (uint16_t)(fiducial_x[i] * 10) << (uint16_t)(fiducial_y[i] * 10);
+            if(num_fiducials > 1) {
+                int index = ((tm_frame_sequence_number + i) % num_fiducials);
+                tp << (uint16_t)(PY_ANALYSIS.xfid[index] * 10) << (uint16_t)(PY_ANALYSIS.yfid[index] * 10);
+            } else {
+                tp << (uint16_t)0 << (uint16_t)0;
+            }
         }
 
         pthread_mutex_unlock(&mutexAnalysis);
@@ -443,6 +552,16 @@ void *CommandListenerThread(void *threadargs)
     CommandReceiver comReceiver( (unsigned short) PORT_CMD);
     comReceiver.init_connection();
 
+    // If talking to the flight computer, synchronize the clock on the odds & ends board
+    // This code is here to make sure that we are ready to receive the imminent sync command
+    if (strncmp(ip_tm, IP_FC, 20) == 0) {
+        printLogTimestamp();
+        std::cout << "Sending synchronization command to flight computer\n";
+        CommandSender cmdSender(IP_FC, PORT_CMD);
+        CommandPacket cp(0x0A, 0x51, 0xF0);
+        cmdSender.send( &cp );
+    }
+
     while(!stop_message[tid])
     {
         int packet_length;
@@ -450,6 +569,7 @@ void *CommandListenerThread(void *threadargs)
         usleep_force(USLEEP_UDP_LISTEN);
         packet_length = comReceiver.listen( );
         if (packet_length <= 0) continue;
+        printLogTimestamp();
         printf("CommandListenerThread: %i bytes, ", packet_length);
         uint8_t *packet;
         packet = new uint8_t[packet_length];
@@ -523,25 +643,71 @@ void *CommandHandlerThread(void *threadargs)
         case SYS_ID_ASP:
             switch(my_data->command_key)
             {
+                case KEY_POINTING_OFF: //Turn OFF pointing mode
+                    if(MODE_POINTING) {
+                        std::cout << "Turning OFF pointing mode\n";
+                        MODE_POINTING = false;
+                        error_code = 0;
+                    } else {
+                        error_code = ACK_NOACTION;
+                    }
+                    break;
+                case KEY_POINTING_ON: //Turn ON pointing mode
+                    if(!MODE_POINTING) {
+                        std::cout << "Turning ON pointing mode\n";
+                        MODE_POINTING = true;
+                        error_code = 0;
+                    } else {
+                        error_code = ACK_NOACTION;
+                    }
+                    break;
                 case KEY_SET_CLOCK_FOR_SYNC: //Set clock value to sync to
                     value &= 0xFFFFFFFFFFFF; //keep only 6 bytes
                     oeb_set_clock(value);
+                    std::cout << "Setting clock value to sync to " << value << std::endl;
                     error_code = 0;
                     break;
-                case KEY_PYC_OFF: //Turn OFF pitch-yaw camera
+                case KEY_PYC_SAVE_OFF: //Turn OFF saving of pitch-yaw images
+                    CAMERAS[0].WantToSave = false;
+                    std::cout << "Turning OFF saving of pitch-yaw images\n";
+                    error_code = 0;
                     break;
-                case KEY_PYC_ON: //Turn ON pitch-yaw camera
+                case KEY_PYC_SAVE_ON: //Turn ON saving of pitch-yaw images
+                    CAMERAS[0].WantToSave = true;
+                    std::cout << "Turning ON saving of pitch-yaw images\n";
+                    error_code = 0;
                     break;
-                case KEY_RC_OFF: //Turn OFF roll camera
+                case KEY_RC_SAVE_OFF: //Turn OFF saving of roll images
+                    CAMERAS[1].WantToSave = false;
+                    std::cout << "Turning OFF saving of roll images\n";
+                    error_code = 0;
                     break;
-                case KEY_RC_ON: //Turn ON roll camera
+                case KEY_RC_SAVE_ON: //Turn ON saving of roll images
+                    CAMERAS[1].WantToSave = true;
+                    std::cout << "Turning ON saving of roll images\n";
+                    error_code = 0;
                     break;
-                case KEY_IRS_OFF: //Turn OFF IR sensor
+                case KEY_DECIMATE_OFF: //Turn OFF image decimation
+                    if(MODE_DECIMATE) {
+                        std::cout << "Turning OFF image decimation\n";
+                        MODE_DECIMATE = false;
+                        error_code = 0;
+                    } else {
+                        error_code = ACK_NOACTION;
+                    }
                     break;
-                case KEY_IRS_ON: //Turn ON IR sensor
+                case KEY_DECIMATE_ON: //Turn ON image decimation
+                    if(!MODE_DECIMATE) {
+                        std::cout << "Turning ON image decimation\n";
+                        MODE_DECIMATE = true;
+                        error_code = 0;
+                    } else {
+                        error_code = ACK_NOACTION;
+                    }
                     break;
                 case KEY_TM_SEND_SETTINGS: //Request settings telemetry packet
                     queue_settings_tmpacket();
+                    std::cout << "Sending settings telemetry packet\n";
                     error_code = 0;
                     break;
                 case KEY_TM_CADENCE_HK: //Set cadence of housekeeping packet
@@ -655,6 +821,7 @@ void *CommandHandlerThread(void *threadargs)
                     break;
                 case KEY_CAMERA_SEND_LAST: //Send latest image
                     TRANSMIT_NEXT_PY_IMAGE = true;
+                    std::cout << "Sending latest pitch-yaw image\n";
                     error_code = 0;
                     break;
                 case KEY_CAMERA_SEND_SPECIFIC: //Send specific image
@@ -707,6 +874,7 @@ void *CommandHandlerThread(void *threadargs)
                     break;
                 case KEY_CAMERA_SEND_LAST: //Send latest image
                     TRANSMIT_NEXT_R_IMAGE = true;
+                    std::cout << "Sending latest roll image\n";
                     error_code = 0;
                     break;
                 case KEY_CAMERA_SEND_SPECIFIC: //Send specific image
@@ -795,6 +963,8 @@ void *CameraMainThread(void *threadargs)
 
     while(!stop_message[tid])
     {
+        printLogTimestamp();
+        printf("Starting camera_main()\n");
         camera_main();
     }
 
@@ -904,6 +1074,10 @@ int main(int argc, char *argv[])
                         std::cout << "Compress mode\n";
                         MODE_COMPRESS = true;
                         break;
+                    case 'd':
+                        std::cout << "Decimate mode\n";
+                        MODE_DECIMATE = true;
+                        break;
                     case 'i':
                         strncpy(ip_tm, &argv[i][j+1], 20);
                         ip_tm[19] = 0;
@@ -916,6 +1090,10 @@ int main(int argc, char *argv[])
                     case 'n':
                         std::cout << "Network diagnostics mode\n";
                         MODE_NETWORK = true;
+                        break;
+                    case 'p':
+                        std::cout << "Pointing mode\n";
+                        MODE_POINTING = true;
                         break;
                     case 's':
                         table_to_load = atoi(&argv[i][j+1]);
@@ -966,6 +1144,11 @@ int main(int argc, char *argv[])
     // initialize odds & ends board
     if(oeb_init() != 0) return 1;
 
+    // Turn off buffering of stdout
+    setbuf(stdout, NULL);
+
+    printLogTimestamp();
+
     // Load settings from previous run, or load table 0
     if(load_settings(table_to_load) == 0) {
         if(table_to_load == 255) {
@@ -1014,6 +1197,7 @@ int main(int argc, char *argv[])
     }
 
     /* Last thing that main() should do */
+    printLogTimestamp();
     printf("Quitting and cleaning up.\n");
 
     /* wait for threads to finish */
@@ -1022,6 +1206,9 @@ int main(int argc, char *argv[])
     pthread_mutex_destroy(&mutexAnalysis);
 
     save_settings();
+
+    printLogTimestamp();
+    printf("Done\n");
 
     oeb_uninit();
 

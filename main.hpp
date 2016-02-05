@@ -5,7 +5,9 @@
 
 #include "Telemetry.hpp"
 
+#undef MAX
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
+#undef MIN
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 
 // global variables found in main.cpp
@@ -16,7 +18,9 @@ extern volatile uint8_t roll_image_counter;
 extern float temp_py, temp_roll;
 extern pthread_mutex_t mutexAnalysis;
 
-extern bool MODE_AUTOMATIC, MODE_COMPRESS, MODE_MOCK, MODE_TIMING, MODE_VERBOSE;
+extern char save_locations[3][100];
+
+extern bool MODE_AUTOMATIC, MODE_COMPRESS, MODE_DECIMATE, MODE_MOCK, MODE_POINTING, MODE_TIMING, MODE_VERBOSE;
 
 int usleep_force(uint64_t microseconds);
 

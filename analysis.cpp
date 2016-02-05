@@ -19,11 +19,30 @@
 #include <unistd.h>
 #include <time.h>
 #include <signal.h>
+#include <opencv.hpp>
 
 #include "main.hpp"
 #include "camera.hpp"
 
 using namespace std;
+
+struct XYZ {
+    XYZ(int _x = 0, int _y = 0, float _z = 0);
+
+    int x, y;
+    float z;
+
+    friend bool operator<(XYZ& a, XYZ &b);
+};
+
+XYZ::XYZ(int _x, int _y, float _z) : x(_x), y(_y), z(_z)
+{
+}
+
+bool operator<(XYZ& a, XYZ &b)
+{
+    return a.z < b.z;
+}
 
 /* =============================================================================================
    initialize the parameters and load a parameter table
@@ -71,11 +90,181 @@ bool init_params(params& val, unsigned int w_in, unsigned int h_in)
 bool analyzePY(info& im, params val, valarray<unsigned char> &imarr)
 {
     //find solar centers
-    Find_3_mask(imarr, val, im);
+    //Find_3_mask(imarr, val, im);
+    fancy_stuff(imarr, val, im);
 
     //find fiducials
 
     //coordinate transform to match-up with sun sensor
+
+    return true;
+}
+// __________________________________________________________________________________________end
+
+
+/* =============================================================================================
+   Find the local peaks (by brute force) in a float cv::Mat
+   ========================================================================================== */
+list<XYZ> find_local_peaks(cv::Mat float_array, float threshold)
+{
+    list<XYZ> peaks;
+
+    for(int i = 1; i < float_array.rows - 1; i++) {
+        for(int j = 1; j < float_array.cols - 1; j++) {
+            float z = float_array.at<float>(i, j);
+            if((z > threshold) &&
+               (float_array.at<float>(i - 1, j - 1) < z) &&
+               (float_array.at<float>(i - 1, j    ) < z) &&
+               (float_array.at<float>(i - 1, j + 1) < z) &&
+               (float_array.at<float>(i    , j - 1) < z) &&
+               (float_array.at<float>(i    , j + 1) < z) &&
+               (float_array.at<float>(i + 1, j - 1) < z) &&
+               (float_array.at<float>(i + 1, j    ) < z) &&
+               (float_array.at<float>(i + 1, j + 1) < z)) {
+                peaks.push_back(XYZ(j, i, z));
+            }
+        }
+    }
+
+    return peaks;
+}
+// __________________________________________________________________________________________end
+
+
+/* =============================================================================================
+   Using OpenCV to process images via convolution
+   ========================================================================================== */
+bool fancy_stuff(valarray<unsigned char> imarr, params& val, info& im)
+{
+    static bool templates_initialized = false;
+    static cv::Mat template_sun_fine(141, 141, CV_32FC1);
+    static cv::Mat kernel_sun_coarse(15, 15, CV_32FC1);
+    static cv::Mat template_fiducial(11, 11, CV_32FC1);
+
+    // Generate the templates if they haven't already been generated
+    if(!templates_initialized) {
+        for(int i = -70; i <= 70; i++) {
+            for(int j = -70; j <= 70; j++) {
+                float temp = 1 - cosh(sqrt(i * i + j * j) / 10) / 200;
+                template_sun_fine.at<float>(i + 70, j + 70) = MAX(temp, 0);
+            }
+        }
+        for(int i = -7; i <= 7; i++) {
+            for(int j = -7; j <= 7; j++) {
+                float temp = 1 - cosh(sqrt(i * i + j * j)) / 200;
+                kernel_sun_coarse.at<float>(i + 7, j + 7) = MAX(temp, -2);
+            }
+        }
+        for(int i = -5; i <= 5; i++) {
+            for(int j = -5; j <= 5; j++) {
+                float temp = 1 - cosh(sqrt(i * i + j * j) * 1.25) / 200;
+                template_fiducial.at<float>(i + 5, j + 5) = MAX(temp, 0);
+            }
+        }
+
+        templates_initialized = true;
+    }
+
+    cv::Mat full_frame(val.height, val.width, CV_8UC1, &imarr[0]);
+
+    // calculate histogram
+    cv::Mat hist;
+    int size[] = {256};
+    float range[] = {0, 256};
+    const float *ranges[] = {range};
+    cv::calcHist(&full_frame, 1, //just one matrix
+                 0,       //just the first channel
+                 cv::Mat(), //no mask
+                 hist,      //output histogram
+                 1, size,   //number of dimensions and bins
+                 ranges,  //range of histogram
+                 true,      //uniform?
+                 false);    //accumulate?
+
+    // Normalize histogram
+    for(int bin = 0; bin < 255; bin++) {
+        im.histogram[bin] = hist.at<float>(bin) / (val.width * val.height);
+    }
+
+    cv::Mat coarse_frame(val.height / 10, val.width / 10, CV_8UC1);
+    for(int i = 0; i < coarse_frame.rows; i++) {
+        for(int j = 0; j < coarse_frame.cols; j++) {
+            coarse_frame.at<unsigned char>(i, j) = full_frame.at<unsigned char>(i * 10 + 5, j * 10 + 5);
+        }
+    }
+
+    cv::Mat correlation(coarse_frame.rows, coarse_frame.cols, CV_32FC1);
+    cv::filter2D(coarse_frame, correlation, CV_32F, kernel_sun_coarse);
+    list<XYZ> coarse_suns = find_local_peaks(correlation, 1000); // FIXME: magic number!
+
+    if(!coarse_suns.empty()) {
+        // Trim down to the top three matches ordered by decreasing intensity
+        coarse_suns.sort();
+        coarse_suns.reverse();
+        if(coarse_suns.size() > 3) coarse_suns.resize(3);
+
+        int index = 0;
+        // Step through each Sun
+        for(list<XYZ>::iterator it = coarse_suns.begin(); it != coarse_suns.end(); ++it) {
+            // Crop the full frame to around the Sun, with protection at the edges
+            int anchor_x = MAX(MIN((*it).x * 10 + 5 - 80, full_frame.cols - 161), 0);
+            int anchor_y = MAX(MIN((*it).y * 10 + 5 - 80, full_frame.rows - 161), 0);
+            cv::Mat sub_frame(full_frame,
+                              cv::Range(anchor_y, anchor_y + 161),
+                              cv::Range(anchor_x, anchor_x + 161));
+
+            // Perform the correlation with the Sun template
+            cv::Mat sub_correlation(161, 161, CV_32FC1);
+            cv::filter2D(sub_frame, sub_correlation, CV_32F, template_sun_fine);
+
+            // Find the center of the Sun
+            double minVal, maxVal;
+            cv::Point minLoc, maxLoc;
+            cv::minMaxLoc(sub_correlation, &minVal, &maxVal, &minLoc, &maxLoc);
+            // TODO: sub-pixel positioning?
+            im.there[index] = true;
+            im.xp[index] = anchor_x + maxLoc.x;
+            im.yp[index] = anchor_y + maxLoc.y;
+            index++;
+
+            // Crop even further
+            anchor_x += 40;
+            anchor_y += 40;
+            cv::Mat subsub_frame(full_frame,
+                                 cv::Range(anchor_y, anchor_y + 81),
+                                 cv::Range(anchor_x, anchor_x + 81));
+            cv::Mat adjusted_frame(81, 81, CV_8UC1);
+            cv::subtract(255, subsub_frame, adjusted_frame);
+
+            // Perform the correlation with the fiducial template
+            cv::Mat subsub_correlation(81, 81, CV_32FC1);
+            cv::filter2D(adjusted_frame, subsub_correlation, CV_32F, template_fiducial);
+            cv::minMaxLoc(subsub_correlation, &minVal, &maxVal, &minLoc, &maxLoc);
+            //cout << minVal << " " << minLoc << " " << maxVal << " " << maxLoc << endl;
+
+            // Find the fiducials
+            list<XYZ> this_fiducials = find_local_peaks(subsub_correlation, 0); // FIXME: magic number!
+            if(!this_fiducials.empty()) {
+                // Keep the four strongest matches
+                this_fiducials.sort();
+                this_fiducials.reverse();
+                if(this_fiducials.size() > 4) this_fiducials.resize(4);
+
+                // Store the fiducial location in the 
+                for(list<XYZ>::iterator it2 = this_fiducials.begin(); it2 != this_fiducials.end(); ++it2) {
+                    im.xfid[im.nfid] = anchor_x + (*it2).x;
+                    im.yfid[im.nfid] = anchor_y + (*it2).y;
+                    //cout << "(" << im.xfid[im.nfid] << "," << im.yfid[im.nfid] << ")\n";
+                    im.nfid++;
+                }
+            }
+        }
+    }
+
+    // Calculate the grid orientation based on the two brightest Suns
+    if(im.there[1]) {
+        im.theta = atan2(im.yp[1] - im.yp[0], im.xp[1] - im.xp[0]) * 180 / 3.14159265358979;
+    }
 
     return true;
 }
@@ -437,6 +626,9 @@ bool analyzeR(info &im, params val, valarray<unsigned char> &imarr)
         im.stdev[i] = sqrt((total_squares[i] - n * im.mean[i] * im.mean[i]) / (n - 1));
     }
 
+    im.good_contrast = (im.mean[0] - 3 * im.stdev[0]) + (im.mean[2] - 3 * im.stdev[2]) > 2 * (im.mean[1] + 3 * im.stdev[1]);
+    im.good_black_level = (im.mean[1] + 3 * im.stdev[1]) < 16;
+
     return true;
 }
 // __________________________________________________________________________________________end
@@ -450,6 +642,8 @@ void reportR(params val, info im)
     cout << val.width << "x" << val.height << endl;
     cout<<"mean: "<<im.mean[0]<<", "<<im.mean[1]<<" , "<<im.mean[2]<<endl;
     cout<<"stdev: "<<im.stdev[0]<<", "<<im.stdev[1]<<" , "<<im.stdev[2]<<endl;
+    cout<<"contrast is "<< (im.good_contrast ? "GOOD" : "BAD") <<endl;
+    cout<<"black is "<< (im.good_black_level ? "GOOD" : "BAD") <<endl;
     cout<<"\n";
 }
 // __________________________________________________________________________________________end

@@ -19,6 +19,11 @@ struct info            //info are data products
     unsigned char thresh[3];
     int ngt[3];                                                //npixels gt thresh --> need to add to mask_centroid
 
+    int nfid;                   //number of fiducials found (up to 4 from each Sun)
+    float xfid[12], yfid[12];   //pixel coordinates of the fiducials (up to 4 from each Sun)
+
+    float theta;                //orientation of the grid based on the line from the first two Suns
+
     //double theta;                            //orientation of relative roll
     //float w;                                            //the rotation rate of grid (using previous theta)
     //int param_tbl;         //which parameter table is loaded
@@ -28,6 +33,7 @@ struct info            //info are data products
     // Roll image analysis
     float mean[3]; // left/middle/right strips
     float stdev[3]; // left/middle/right strips
+    bool good_contrast, good_black_level;
 };
 
 struct params        //parameters control the program and define variables
@@ -64,6 +70,7 @@ struct params        //parameters control the program and define variables
 bool init_params(params& val, unsigned int w_in, unsigned int h_in);
 
 bool analyzePY(info &im, params val, valarray<unsigned char> &imarr);
+bool fancy_stuff(valarray<unsigned char> imarr, params& val, info& im);
 bool Find_3_mask(valarray<unsigned char> imarr, params& val, info& im);
 bool find_thresh(valarray<unsigned char> &imarr, unsigned char thresh[], params val);
 bool crop(valarray<unsigned char>& imarr, const char* fn,float x, float y, params val);
